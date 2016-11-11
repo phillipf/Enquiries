@@ -1,0 +1,37 @@
+---
+title: "Customer Enquiries analysis"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Enquiries)
+library(readr)
+```
+
+## GitHub Documents
+
+This is an R Markdown format used for publishing markdown documents to GitHub. When you click the **Knit** button all R code chunks are run and a markdown file (.md) suitable for publishing to GitHub is generated.
+
+read in the annual call qualifier data 
+
+```{r load}
+CallQual <- read_delim("N:/ABR/Output 2 Root Cause SRM and Repeats/data for phil 03 oct.txt", delim = "\t")
+```
+
+fix any parsing failures due to inconsistent delimeters
+
+```{r fix parsing fails}
+CallQual2 <- Enquiries::ParsingFailFix(CallQual)
+```
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

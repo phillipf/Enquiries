@@ -49,70 +49,29 @@ ParsingFailFix <- function(table) {
     id <- unname(unlist(apply(test1, 2, which)))
     column <- sapply(id, function(x) which(unname(apply(test1, 2, which)) == x))
 
+    error1 <- list()
+    error2 <- list()
+    error3 <- list()
+    error4 <- list()
+    for(i in 1:length(id)) {
+      error1[[i]] <- table2[[id[i], column[i]]]
+      error2[[i]] <- str_split(error1[[i]], "\\r\\n")[[1]]
+      error3[[i]] <- error2[[i]][2:length(error2[[i]])]
+      error4[[i]] <- ldply(error3[[i]], function(x) str_split(x, "\\r\\n")[[1]]) %>%
+                     separate(V1, colnames(table2), sep="\t")
+    }
 
-
-    fixdelim <- function(id, column) {
-      error1 <- table2[[id, column]]
-      error2 <- str_split(error1, "\\r\\n")[[1]]
-      error3 <- error2[2:length(error2)]
-
-      error4 <- ldply(error3, function(x) str_split(x, "\\r\\n")[[1]]) %>%
-                separate(V1, colnames(table2), sep="\t")
+    error5 <- ldply(error4)
 
       #replace error row
-      table2[[id, column]] <- error2[1]
-      table2[id, column:ncol(table2)] <- str_split(table2[[id, column]], "\t")[[1]]
+    for(i in 1:length(id)) {
+      table2[[id[i], column[i]]] <- error2[[i]][1]
+      table2[id[i], column[i]:ncol(table2)] <- str_split(table2[[id[i], column[i]]], "\t")[[1]]
+    }
 
     #rbind the cleaned table onto table 2
-      table3 <- rbind(table2, error4) %>%
+      table3 <- rbind(table2, error5) %>%
                 distinct()
-    }
 
-    table3 <- fixdelim(id[1], column[1])
-
-  #test for text ending with ":"
-
-    test2fun <- function(y) {
-      grepl(":$", y)
-    }
-
-    test2afun <- function(y) {
-      grepl("RES|NONRES", y)
-    }
-
-    test2 <- apply(table3, 2, function(x) sapply(x, test2fun))
-
-    test <- unlist(apply(test2, 2, which))
-    id <- unname(unlist(apply(test2, 2, which)))
-    column <- which(unlist(lapply(unname(apply(test2, 2, which)), function(x) length(x) > 0)))
-    columnnames <- names(apply(test2, 2, which))
-
-    test2a <- apply(table3, 2, function(x) sapply(x, test2afun))
-
-    test <- unlist(apply(test2a, 2, which))
-    id <- unname(unlist(apply(test2a, 2, which)))
-    column <- which(unlist(lapply(unname(apply(test2a, 2, which)), function(x) length(x) > 0)))
-    columnnames <- names(apply(test2a, 2, which))
-
-    table4 <- table3[id, ] %>%
-              unite(MEMO, min(column):max(column), sep="|") %>%
-              mutate(MEMO = gsub(":\\||\\|\\?", " ", MEMO)) %>%
-              separate(MEMO, columnnames[column], sep = "\\|") %>%
-              mutate(MEMO = ifelse((!is.na(USES) & USES != "RES" & USES != "NONRES"),
-                                   paste(MEMO, USES, sep = " "),
-                                   MEMO),
-                     USES = ifelse((!is.na(USES) & USES != "RES" & USES != "NONRES"),
-                                   NA,
-                                   USES))
-
-
-    test2afunc <- function(x) {
-      i <- max(column)
-      while(i >= min(column)) {
-        a = i - 1
-        y = x[columnnames[c(a,i)]]
-      }
-    }
-
-    return(table4)
+      return(table3)
 }

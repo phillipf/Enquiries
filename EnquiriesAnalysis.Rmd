@@ -31,28 +31,11 @@ conn <- ABR::PostgreSQLconnect()
 CallQual <- read_delim("N:/ABR/GENTRACK DATA/data AGAIN  for phil 22 nov.txt", 
                     delim = "|") 
 
-CallQual2 <- CallQual 
-             #select(USES,
-                    #MEMO_POS1:MEMO_POS10) 
+```
 
-#CallQual2[is.na(CallQual2)] <- ""
+fix any parsing failures due to inconsistent delimeters
 
-attributes(CallQual2)$problems <- ""
-
-#CallQual2 <- CallQual2 %>%
-             #mutate(MEMO = paste(MEMO_POS1, 
-                                 #MEMO_POS2, 
-                                 #MEMO_POS3, 
-                                 # MEMO_POS4,
-                                 # MEMO_POS5,
-                                 # MEMO_POS6,
-                                 # MEMO_POS7,
-                                 # MEMO_POS8,
-                                 # MEMO_POS9,
-                                 # MEMO_POS10,
-                                 # sep = "?")) 
-
-
+```{r fix parsing fails}
 Clean_df <- function(input) {
     probs_location <- input[problems(input)$row,]
     
@@ -111,139 +94,10 @@ correct3 <- ldply(correct2, cor_time) %>% distinct
 colnames(correct3) <- colnames(CallQual)
 
 CallQual2 <- rbind(correct3, CallQual) %>% distinct
-
-
-#test if any columns contain a table
-    test1fun <- function(y) {
-      length(unlist(str_split(y, "\\r\\n"))) > 1
-    }
-
-    test1 <- apply(probs, 2, function(x) sapply(x, test1fun))
-
-    test1a <- unlist(apply(test1, 2, which))
-    id <- unname(unlist(apply(test1, 2, which)))
-    column <- sapply(id, function(x) which(unlist(apply(test1, 2, which)) == x))
-
-for(i in 1:nrow(probs)) {
-    y = probs[i,] 
-    a = which(grepl("Enquiry.*", y))[1]
-    b = which(y == "RES" | y == "NONRES")
-    c = b - a
-    if(length(c) != 0) {
-      if(c > 1) {
-           d = as.character(as.vector(y[,seq(a, b-1)]))
-           e = d[!is.na(d)]
-           probs[i,a] <- paste(y[[1,a]], paste(e, sep="", collapse=""))
-           probs[i, b-1] <- NA
-           
-           while(a + c <= ncol(probs)) {
-                 probs[i, a + 1] <- y[[1, a + c]]
-                 probs[i, a + c] <- NA
-                 a = a + 1
-                 }
-       
-      }
-    }
-    else if(length(b) == 0){ 
-           d = as.character(as.vector(y[,seq(a, ncol(probs))]))
-           e = d[!is.na(d)]
-           probs[i,a] <- paste(y[[1,a]], paste(e, sep="", collapse=""))
-           probs[i, ncol(probs)] <- NA                                
-    } 
-}
-
-lapply(1:6, function(i) {y = probs[i,] 
-                                    a = which(grepl("Enquiry.*", y))[1]
-                                    b = which(y == "RES" | y == "NONRES")
-                                    c = b - a
-                                    if(length(c) != 0) {
-                                      if(c > 1) {
-                                           d = as.character(as.vector(y[,seq(a, b-1)]))
-                                           e = d[!is.na(d)]
-                                           probs[i,a] <- paste(y[[1,a]], paste(e, sep="", collapse=""))
-                                           
-                                           while(a + c <= ncol(probs)) {
-                                                 probs[i, a + 1] <- y[[1, a + c]]
-                                                 a = a + 1
-                                                 }
-                                       
-                                      }
-                                    }
-                                    else {
-                                                                       
-                                    } 
-                                  }) 
-
-```
-
-fix any parsing failures due to inconsistent delimeters
-
-```{r fix parsing fails}
-CallQual2 <- Enquiries::ParsingFailFix(CallQual)
 ```
 
 
 ```{r organise memo information}
-
-MemoNotes <- Enquiries::Memo(MEMO = CallQual2$MEMO, USES = CallQual$USES)
-
-MemoNotes[] <- lapply(MemoNotes, as.character)
-
-Enquiry <- function(x) {
-  
-  if(grepl("Enquiry\\s=\\s[[:alpha:]]+", x) == TRUE) {
-    
-    return(gsub("(Enquiry\\s=\\s)([[:alpha:]]+)", "\\2", x))
-  }
-  
-  else {
-    NA
-  }
-}
-
-Result <- function(x) {
-  
-    if(grepl("Result\\s*=\\s*", x) == TRUE) {
-      #Result = #
-      a <- gsub("(Result\\s*=\\s*)(.*)", "\\2", x)
-      
-          if(lapply(a, function(x) grepl("(.*)-(.*)-(.*)", x) == TRUE)) {
-            b <- gsub("(.*)-(.*)-(.*)", "\\1", a)
-            c <- gsub("(.*)-(.*)-(.*)", "\\2", a)
-            d <- gsub("(.*)-(.*)-(.*)", "\\3", a)
-            return(data.frame(MEC.1 = b, MEC.2 = c, MEC.3 = d))
-          }
-          
-          else if(lapply(a, function(x) grepl("(.*)-(.*)", a) == TRUE)) {
-            
-            b <- gsub("(.*)-(.*)", "\\1", a)
-            c <- gsub("(.*)-(.*)", "\\2", a)
-            #d <- NA
-            return(data.frame(MEC.1 = b, MEC.3 = c))
-          }
-      
-          else if(lapply(a, function(x) grepl("(.*)", a) == TRUE)) {
-
-            return(data.frame(MEC.1 = a))
-          }
-          
-          else {
-            b <- NA
-            #c <- NA
-            #d <- NA
-            return(data.frame(MEC.1 = NA))
-          }
-    }
-    
-    else {
-      b <- NA
-      #c <- NA
-      #d <- NA
-      return(data.frame(MEC.1 = NA))
-    }
-   
-    
-  }
 
 names <- randomNames(n = 1000000, which.names = "first")
 
@@ -370,6 +224,59 @@ result = lapply(CallQual2$MEMO_POS2, Result)
 names(result) <- CallQual2$MEMO_CONSUMER
 result_tbl <- ldply(result)
 
+
+```
+
+```{r Key Accounts}
+PropertyLayer <- read.csv("file:///N:/KarlBlackhall/Gentrack AL/PROPERTY_LAYER_1516FY (Q1-Q4).csv",
+                          stringsAsFactors = FALSE) %>%
+                 mutate(ACC_NAME = gsub("[[:space:]]|[^[:alnum:]]", "", ACCOUNT_NAME))
+
+KeyAccounts <- read.csv("file:///C:/Enquiries/data/KeyAccounts.csv",
+                        stringsAsFactors = FALSE) %>%
+               mutate(ACCOUNT_NAME = str_trim(gsub("(.+)(\\(.+)", "\\1", Key.Customer))) %>%
+               select(ACCOUNT_NAME) 
+
+
+KeyAccountsName <- unique(gsub("[[:space:]]|[^[:alnum:]]", "", KeyAccounts$ACCOUNT_NAME))
+
+link <- lapply(KeyAccountsName, function(x) PropertyLayer$MASTERID[which(grepl(x, PropertyLayer$ACC_NAME, ignore.case = TRUE) == TRUE)])
+
+KeyAccountsID <- data.frame(MASTERID = unlist(link)) %>%
+                 left_join(select(PropertyLayer, MASTERID, ACCOUNT_NAME)) %>%
+                 distinct()
+
+write.csv(KeyAccountsID, "data/KeyAccountsID.csv")
+
+```
+
+```{r Trade Waste}
+
+
+```
+
+```{r Annual plot}
+
+EnquiryCountAnnual <- ddply(CallQual2, .(MEC, USES, SRM), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      arrange(-Total) %>%
+                      select(USES,
+                             MEC,
+                             SRM,
+                             Total)
+
+p1Annual <- ggplot(data = EnquiryCountAnnual,
+             aes(x = factor(1),
+                 fill= factor(MEC),
+                 y = Total)) 
+
+p1Annual <- p1Annual + geom_bar(stat="identity")
+
+p1Annual <- p1Annual + facet_grid(facets=USES~SRM)
+
+```
+
+```{r Random code}
+
 CallQual3 <- CallQual %>% 
              select(-MEMO_POS1:-MEMO_POS10) %>% 
              cbind(MemoNotes) %>% 
@@ -424,56 +331,6 @@ CallQual4 <- CallQual3 %>%
                     CONSUMER_LAG)
 
 ```
-
-```{r Key Accounts}
-PropertyLayer <- read.csv("file:///N:/KarlBlackhall/Gentrack AL/PROPERTY_LAYER_1516FY (Q1-Q4).csv",
-                          stringsAsFactors = FALSE) %>%
-                 mutate(ACC_NAME = gsub("[[:space:]]|[^[:alnum:]]", "", ACCOUNT_NAME))
-
-KeyAccounts <- read.csv("file:///C:/Enquiries/data/KeyAccounts.csv",
-                        stringsAsFactors = FALSE) %>%
-               mutate(ACCOUNT_NAME = str_trim(gsub("(.+)(\\(.+)", "\\1", Key.Customer))) %>%
-               select(ACCOUNT_NAME) 
-
-
-KeyAccountsName <- unique(gsub("[[:space:]]|[^[:alnum:]]", "", KeyAccounts$ACCOUNT_NAME))
-
-link <- lapply(KeyAccountsName, function(x) PropertyLayer$MASTERID[which(grepl(x, PropertyLayer$ACC_NAME, ignore.case = TRUE) == TRUE)])
-
-KeyAccountsID <- data.frame(MASTERID = unlist(link)) %>%
-                 left_join(select(PropertyLayer, MASTERID, ACCOUNT_NAME)) %>%
-                 distinct()
-
-write.csv(KeyAccountsID, "data/KeyAccountsID.csv")
-
-```
-
-```{r Trade Waste}
-
-
-```
-
-```{r Annual plot}
-
-EnquiryCountAnnual <- ddply(CallQual2, .(MEC, USES, SRM), summarise, Total = length(MEMO_CONSUMER)) %>%
-                      arrange(-Total) %>%
-                      select(USES,
-                             MEC,
-                             SRM,
-                             Total)
-
-p1Annual <- ggplot(data = EnquiryCountAnnual,
-             aes(x = factor(1),
-                 fill= factor(MEC),
-                 y = Total)) 
-
-p1Annual <- p1Annual + geom_bar(stat="identity")
-
-p1Annual <- p1Annual + facet_grid(facets=USES~SRM)
-
-```
-
-
 
 ## Including Plots
 

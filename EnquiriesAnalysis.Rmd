@@ -26,7 +26,7 @@ This is an R Markdown format used for publishing markdown documents to GitHub. W
 
 read in the annual call qualifier data 
 
-```{r load, eval=FALSE, include=FALSE}
+```{r load, eval=FALSE, include=FALSE, echo=FALSE}
 conn <- ABR::PostgreSQLconnect()
 
 CallQual <- read_delim("N:/ABR/GENTRACK DATA/test.txt", 
@@ -500,7 +500,7 @@ path <- function(x) {
 
 
 
-```{r Key Accounts, eval=FALSE, include=FALSE}
+```{r Key Accounts, eval=FALSE, include=FALSE, echo=FALSE}
 PropertyLayer <- read.csv("file:///N:/KarlBlackhall/Gentrack AL/PROPERTY_LAYER_1516FY (Q1-Q4).csv",
                           stringsAsFactors = FALSE) %>%
                  mutate(ACC_NAME = gsub("[[:space:]]|[^[:alnum:]]", "", ACCOUNT_NAME))
@@ -547,7 +547,7 @@ p1Annual <- p1Annual + geom_bar(stat="identity")
 
 ```
 
-```{r Random code, eval=FALSE, include=FALSE}
+```{r Random code, eval=FALSE, include=FALSE, echo=FALSE}
 
 CallQual3 <- CallQual %>% 
              select(-MEMO_POS1:-MEMO_POS10) %>% 

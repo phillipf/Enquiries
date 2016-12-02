@@ -26,10 +26,10 @@ This is an R Markdown format used for publishing markdown documents to GitHub. W
 
 read in the annual call qualifier data 
 
-```{r load}
+```{r load, eval=FALSE, include=FALSE}
 conn <- ABR::PostgreSQLconnect()
 
-CallQual <- read_delim("N:/ABR/GENTRACK DATA/data AGAIN  for phil 22 nov.txt", 
+CallQual <- read_delim("N:/ABR/GENTRACK DATA/test.txt", 
                     delim = "|") 
 
 ```
@@ -38,22 +38,50 @@ fix any parsing failures due to inconsistent delimeters
 
 ```{r fix parsing fails}
 Clean_df <- function(input) {
-    probs_location <- input[problems(input)$row,]
+    # probs_location <- input[problems(input)$row,]
+    # 
+    # col <- unique(problems(input)$col[!is.na(problems(input)$col)])
+    # 
+    # col <- vapply(col, function(x) which(x == colnames(input)), numeric(1))
+    # 
+    # probs <- data.frame(problems(input)) %>% select(row, col) %>% distinct
+    # 
+    # probs$idx <- ""
+    # probs$idx[!is.na(probs$col)] <- as.numeric(vapply(probs$col[!is.na(probs$col)], function(x) col[x], numeric(1))) 
+    # 
+    # probs$idx <- as.numeric(probs$idx)
+    # 
+    # probs$df <- ""
+    # 
+    # probs$df[!is.na(probs$idx)] <- unname(vapply(which(!is.na(probs$idx)), function(i) grepl("\\r\\n", input[[probs$row[i], probs$idx[i]]]), logical(1)))
+  
+    loc <- lapply(CallQual, function(x) grepl("\\r\\n", x)) 
     
-    col <- unique(problems(input)$col[!is.na(problems(input)$col)])
+    test1 <- vapply(loc, function(x) any(x == TRUE), logical(1))
     
-    col <- vapply(col, function(x) which(x == colnames(input)), numeric(1))
+    probs <- loc[test1]
     
-    probs <- data.frame(problems(input)) %>% select(row, col) %>% distinct
+    rm(loc)
     
-    probs$idx <- ""
-    probs$idx[!is.na(probs$col)] <- as.numeric(vapply(probs$col[!is.na(probs$col)], function(x) col[x], numeric(1))) 
+    x <- probs[1]
     
-    probs$idx <- as.numeric(probs$idx)
+    y <- CallQual[unlist(x),names(x)]
     
-    probs$df <- ""
+    y$tbl <- gsub("(.*)\\r\\n(.*)*", "\\2", y$MEMO_POS3)
     
-    probs$df[!is.na(probs$idx)] <- unname(vapply(which(!is.na(probs$idx)), function(i) grepl("\\r\\n", input[[probs$row[i], probs$idx[i]]]), logical(1)))
+    y$MEMO_POS3 <- gsub("(.*)\\r\\n(.*)", "\\1", y$MEMO_POS3)
+    
+    new <- read_delim(y$tbl[1], 
+                    delim = "|") 
+    test <- y$tbl[1]
+    
+    #loc <- regexec("\\|[^\\|]*(\\r\\n)[^\\|]*\\|", test, value=TRUE)
+    
+    x <- gsub("(\\|[^\\|]*)(\\r\\n)([^\\|]*\\|)*", "\\1 \\3", test)
+    
+    new <- read_delim(x, delim = "|", col_names = FALSE) 
+    
+    gsub("(.*)(\\r\\n)(.*)", "\\3", test)
     
     df <- probs[probs$df == TRUE,]
     
@@ -276,6 +304,14 @@ Clean <- function(CallQual) {
     
     CallQual[idx,25:33] <- CallQual[idx,26:34]
     
+    idx <- !grepl("^RES|^NONRES", CallQual$USES)
+    
+    idx.2 <- !is.na(CallQual$MEMO_POS10)
+    
+    CallQual[idx & idx.2,]$MEMO_POS9 <- paste(CallQual[idx & idx.2,]$MEMO_POS9, CallQual[idx & idx.2,]$MEMO_POS10)
+    
+    CallQual[idx,25:33] <- CallQual[idx,26:34]
+    
     CallQual <- CallQual %>%
                  mutate(MEMO = paste(MEMO_POS3, 
                                     MEMO_POS4,
@@ -293,7 +329,7 @@ Clean <- function(CallQual) {
 return(CallQual)
 }
 
-CallQual4 <- Clean(CallQual3) #to do: need to fix ENQUIRY = FALSE#
+CallQual2 <- Clean(CallQual) #to do: need to fix ENQUIRY = FALSE#
 
 rm(CallQual3)
 
@@ -312,11 +348,17 @@ row.names(CallQual5) <- CallQual5$MEMO_ID
 
 x <- apply(CallQual5, 1, function(x) which(grepl("^RES|^NONRES", x) == TRUE))
 
-x[lapply(x, )]
+loc <- which(colnames(CallQual5) == "MEMO_POS10")
 
-x[lapply(x,length) == 0] <- 27
+x[lapply(x,length) == 0] <- 26
+
+gap <- lapply(x, function(x) seq(from = loc, to=x-1))
+
+MEMO_POS10 <- lapply(1:nrow(CallQual5), function(i) CallQual5[gap[[i]], ]) 
 
 x <- unlist(unname(x))
+
+CallQual[idx,25:33]
 
 y <- lapply(1:nrow(CallQual5), function(i) CallQual5[[i,x[i]]]) 
 
@@ -458,7 +500,7 @@ path <- function(x) {
 
 
 
-```{r Key Accounts}
+```{r Key Accounts, eval=FALSE, include=FALSE}
 PropertyLayer <- read.csv("file:///N:/KarlBlackhall/Gentrack AL/PROPERTY_LAYER_1516FY (Q1-Q4).csv",
                           stringsAsFactors = FALSE) %>%
                  mutate(ACC_NAME = gsub("[[:space:]]|[^[:alnum:]]", "", ACCOUNT_NAME))
@@ -488,7 +530,7 @@ write.csv(KeyAccountsID, "data/KeyAccountsID.csv")
 
 ```{r Annual plot}
 
-EnquiryCountAnnual <- ddply(CallQual4, .(ENQUIRY, USES), summarise, Total = length(MEMO_CONSUMER)) %>%
+EnquiryCountAnnual <- ddply(CallQual2, .(ENQUIRY, USES), summarise, Total = length(MEMO_CONSUMER)) %>%
                       arrange(-Total) %>%
                       select(USES,
                              ENQUIRY,
@@ -505,7 +547,7 @@ p1Annual <- p1Annual + geom_bar(stat="identity")
 
 ```
 
-```{r Random code}
+```{r Random code, eval=FALSE, include=FALSE}
 
 CallQual3 <- CallQual %>% 
              select(-MEMO_POS1:-MEMO_POS10) %>% 

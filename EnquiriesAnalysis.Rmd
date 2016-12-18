@@ -1,0 +1,615 @@
+---
+title: "Customer Enquiries analysis"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Enquiries)
+library(readr)
+library(dplyr)
+library(plyr)
+library(tidyr)
+library(ggplot2)
+library(stringr)
+library(ABR)
+library(lubridate)
+library(sqldf)
+library(randomNames)
+library(data.table)
+
+```
+
+## GitHub Documents
+
+This is an R Markdown format used for publishing markdown documents to GitHub. When you click the **Knit** button all R code chunks are run and a markdown file (.md) suitable for publishing to GitHub is generated.
+
+read in the annual call qualifier data 
+
+```{r load, eval=FALSE, include=FALSE, echo=FALSE}
+conn <- ABR::PostgreSQLconnect()
+
+CallQual <- read_delim("N:/ABR/GENTRACK DATA/test.txt", 
+                    delim = "|") 
+
+```
+
+fix any parsing failures due to inconsistent delimeters
+
+```{r fix parsing fails}
+Clean_df <- function(input) {
+    # probs_location <- input[problems(input)$row,]
+    # 
+    # col <- unique(problems(input)$col[!is.na(problems(input)$col)])
+    # 
+    # col <- vapply(col, function(x) which(x == colnames(input)), numeric(1))
+    # 
+    # probs <- data.frame(problems(input)) %>% select(row, col) %>% distinct
+    # 
+    # probs$idx <- ""
+    # probs$idx[!is.na(probs$col)] <- as.numeric(vapply(probs$col[!is.na(probs$col)], function(x) col[x], numeric(1))) 
+    # 
+    # probs$idx <- as.numeric(probs$idx)
+    # 
+    # probs$df <- ""
+    # 
+    # probs$df[!is.na(probs$idx)] <- unname(vapply(which(!is.na(probs$idx)), function(i) grepl("\\r\\n", input[[probs$row[i], probs$idx[i]]]), logical(1)))
+  
+    loc <- lapply(CallQual, function(x) grepl("\\r\\n", x)) 
+    
+    test1 <- vapply(loc, function(x) any(x == TRUE), logical(1))
+    
+    probs <- loc[test1]
+    
+    rm(loc)
+    
+    x <- probs[1]
+    
+    y <- CallQual[unlist(x),names(x)]
+    
+    y$tbl <- gsub("(.*)\\r\\n(.*)*", "\\2", y$MEMO_POS3)
+    
+    y$MEMO_POS3 <- gsub("(.*)\\r\\n(.*)", "\\1", y$MEMO_POS3)
+    
+    new <- read_delim(y$tbl[1], 
+                    delim = "|") 
+    test <- y$tbl[1]
+    
+    #loc <- regexec("\\|[^\\|]*(\\r\\n)[^\\|]*\\|", test, value=TRUE)
+    
+    x <- gsub("(\\|[^\\|]*)(\\r\\n)([^\\|]*\\|)*", "\\1 \\3", test)
+    
+    new <- read_delim(x, delim = "|", col_names = FALSE) 
+    
+    gsub("(.*)(\\r\\n)(.*)", "\\3", test)
+    
+    df <- probs[probs$df == TRUE,]
+    
+    if(nrow(df) == 0) {
+      return(NA)
+    }
+    
+    #dfs <- lapply(1:nrow(df), function(i) Clean_df(read_delim(input[[df$row[i], df$idx[i]]], delim = "|", skip = 1, col_names = FALSE)))
+    
+    dfs <- lapply(1:nrow(df), function(i) c(dfs, input[[df$row[i], df$idx[i]]]))
+    
+    dfs2 <- lapply(1:nrow(df), function(i) c(dfs, Clean_df(read_delim(input[[df$row[i], df$idx[i]]], delim = "|", skip = 1, col_names = FALSE))))
+    
+    
+return(unlist(dfs2))
+
+}
+
+dfs <- ""
+
+clean <- Clean_df(CallQual)
+
+clean2 <- unique(clean[!is.na(clean) & clean != ""])
+
+correct2 <- lapply(clean2, function(x) read_delim(x, delim = "|", skip = 1, col_names = FALSE))
+
+#correct3 <- correct2[lapply(correct2, !is.na)]
+
+cor_time <- function(df) {
+
+  x <- df[lapply(df, is.POSIXct) == TRUE] 
+  df[lapply(df, is.POSIXct) == TRUE] <- lapply(x, function(x) dmy_hms(format(x, format="%y-%m-%d %H:%M:%S")))
+  
+  return(df)
+}
+
+correct3 <- ldply(correct2, cor_time) %>% distinct
+
+colnames(correct3) <- colnames(CallQual)
+
+CallQual2 <- cor_time(CallQual) %>% distinct
+
+CallQual3 <- rbind(correct3, CallQual2) %>% distinct
+
+rm(CallQual, CallQual2, correct2, correct3, clean, clean2)
+
+dbWriteTable(con=conn,
+             name="CallQual3",
+             value=CallQual3,
+             row.names=FALSE,
+             append=TRUE)
+
+CallQual3 <- dbReadTable(con=conn,
+                         name="CallQual3")
+
+```
+
+Extract data form the MEC notes
+
+```{r organise memo information}
+
+library(purrr)
+
+names <- randomNames(n = 2000000, which.names = "first")
+
+Clean <- function(CallQual) { 
+  
+    CallQual$ENQUIRY <- ""
+    
+    p.1 <- "(.[^=]*)=(.[^-]*)"
+    idx <- grepl(p.1, CallQual$MEMO_POS1)
+    CallQual$ENQUIRY[idx] <- gsub(p.1, "\\2",  CallQual$MEMO_POS1[idx])
+    
+    p.2 <- "(.[^=]*):"
+    idx <- grepl(p.2, CallQual$MEMO_POS1)
+    #CallQual$ENQUIRY[idx] <- gsub(p.2, "\\2",  CallQual$MEMO_POS1[idx])
+    CallQual$ENQUIRY[idx] <- paste(CallQual$MEMO_POS1[idx], CallQual$MEMO_POS2[idx]) 
+    
+    id <- logical(length(CallQual$ENQUIRY[idx]))
+    
+    id[grepl("bill", CallQual$ENQUIRY[idx])] <- "ACCOUNT INFORMATION"
+    id[grepl("leak", CallQual$ENQUIRY[idx])] <- "METERING"
+    id[grepl("update my details", CallQual$ENQUIRY[idx])] <- "ACCOUNT MAINTENANCE"
+    id[grepl("payment arrangement", CallQual$ENQUIRY[idx])] <- "PAYMENTS"
+    id[grepl("payment[^arrangement]", CallQual$ENQUIRY[idx])] <- "PAYMENTS"
+    id[grepl("disconnection and reconnection", CallQual$ENQUIRY[idx])] <- "Water Serv Rbty"
+    id[grepl("change the details", CallQual$ENQUIRY[idx])] <- "ACCOUNT MAINTENANCE"
+    id[grepl("deceased", CallQual$ENQUIRY[idx])] <- "OWNER"
+    id[grepl("final notice", CallQual$ENQUIRY[idx])] <- "ISSUE BILL"
+    id[grepl("pension", CallQual$ENQUIRY[idx])] <- "CONCESSIONS & REBATES"
+    id[grepl("no longer occupy", CallQual$ENQUIRY[idx])] <- "TENANCY"
+    CallQual$ENQUIRY[idx][id == "FALSE"] <- "OTHER"
+    
+    CallQual$ENQUIRY[idx] <- id
+    
+    p.3 <- "(.*)-(.*)"
+    idx <- grepl(p.3, CallQual$ENQUIRY)
+    CallQual$ENQUIRY[idx] <- gsub(p.3, "\\1", CallQual$ENQUIRY[idx])
+    
+    enquiry <- unique(CallQual$ENQUIRY)
+    
+    idx <- lapply(enquiry, function(x) which(grepl(x, enquiry[-which(enquiry == x)]) == TRUE) + 1)
+    
+    names(idx) <- enquiry
+    
+    idx <- idx[lapply(idx, length) > 0]
+    
+    idx <- lapply(idx, function(x) which(grepl(paste(enquiry[x], collapse = "|"), CallQual$ENQUIRY)))
+    
+    lapply(names(idx), function(i) CallQual$ENQUIRY[idx[[i]]] <<- i)
+    
+    split <- strsplit(enquiry, "\\W+")
+    
+    # idx <- lapply(split, function(x) any(tolower(x) == tolower(names)))
+    
+    # wordcount <- vapply(split, length, integer(1))
+    # 
+    # keys <- enquiry[wordcount <= 5]
+    # 
+    # CallQual$ENQUIRY <- str_trim(CallQual$ENQUIRY)
+    # 
+    # lapply(seq_along(idx), function(i) keys[unlist(idx[i])] <- keys[i])
+    # 
+    # keys <- keys[!tolower(keys) %in% tolower(names)]
+    # 
+    # id <- !(CallQual$RESULT %in% keys)
+    # 
+    # CallQual$MEMO_POS2[id] <- str_trim(paste(CallQual$MEMO_POS2[id], CallQual$RESULT[id], sep = " "))
+    
+    # CallQual$RESULT[id] <- ""
+    
+    
+    CallQual$ACTION <- ""
+    
+    fix <- "(-|not|payment)$"
+    idx <- grepl(fix, CallQual$MEMO_POS2)
+    
+    CallQual$MEMO_POS2[idx] <- paste(CallQual$MEMO_POS2[idx], CallQual$MEMO_POS3[idx])
+    
+    CallQual$MEMO_POS3[idx] <- ""
+    
+    fix <- "re-send"
+    idx <- grepl(fix, CallQual$MEMO_POS2, ignore.case = TRUE)
+    
+    CallQual$MEMO_POS2[idx] <- gsub("re-send", "resend", CallQual$MEMO_POS2[idx], ignore.case = TRUE)
+    
+    p.1 <- "(.[^=]*)=(.[^-]*)-(.[^-]*)-(.[^-]*)"
+    idx.1 <- grepl(p.1, CallQual$MEMO_POS2)  
+    
+    CallQual$ACTION[idx.1] <- gsub(p.1, "\\2 \\3", CallQual$MEMO_POS2[idx.1]) 
+    
+    p.2 <- "(.[^=]*)=(.[^-]*)-(.[^-]*)"
+    idx.2 <- grepl(p.2, CallQual$MEMO_POS2)  
+    
+    CallQual$ACTION[idx.2 & !idx.1] <- gsub(p.2, "\\2", CallQual$MEMO_POS2[idx.2 & !idx.1]) 
+    
+    p.3 <- "(.[^=]*)=(.[^-]*)"
+    idx.3 <- grepl(p.3, CallQual$MEMO_POS2)  
+    
+    CallQual$ACTION[idx.3 & !idx.2 & !idx.1] <- gsub(p.3, "\\2", CallQual$MEMO_POS2[idx.3 & !idx.2 & !idx.1]) 
+    
+    CallQual$RESULT <- ""
+    
+    p.1 <- "(.[^=]*)=(.[^-]*)-(.[^-]*)-(.[^-]*)"
+    idx.1 <- grepl(p.1, CallQual$MEMO_POS2)  
+    
+    CallQual$RESULT[idx.1] <- gsub(p.1, "\\4", CallQual$MEMO_POS2[idx.1]) 
+    
+    p.2 <- "(.[^=]*)=(.[^-]*)-(.[^-]*)"
+    idx.2 <- grepl(p.2, CallQual$MEMO_POS2)  
+    
+    CallQual$RESULT[idx.2 & !idx.1] <- gsub(p.2, "\\3", CallQual$MEMO_POS2[idx.2 & !idx.1]) 
+    
+    p.3 <- "(.[^=]*)=(.[^-]*)"
+    idx.3 <- grepl(p.3, CallQual$MEMO_POS2)  
+    
+    CallQual$RESULT[idx.3 & !idx.2 & !idx.1] <- ""
+    
+    CallQual$RESULT <- str_trim(CallQual$RESULT)
+    
+    #Clean the result column
+    result <- unique(CallQual$RESULT)
+    finalised <- paste(result[grepl("^f[^o].*", result, ignore.case = TRUE)], collapse = "|")
+    id <- grepl(finalised, CallQual$RESULT, ignore.case = TRUE) 
+    CallQual$RESULT[id] <- gsub(finalised, "Finalised", CallQual$RESULT[id], ignore.case = TRUE)
+    
+    result <- unique(CallQual$RESULT)
+    referred <- paste(result[grepl("^ref.*[^L]$", result, ignore.case = TRUE)], collapse = "|")
+    id <- grepl(referred, CallQual$RESULT, ignore.case = TRUE) 
+    CallQual$RESULT[id] <- gsub(referred, "Referred", CallQual$RESULT[id], ignore.case = TRUE)
+    
+    result <- unique(CallQual$RESULT)
+    crel <- paste(result[grepl("^ref.*[L]$", result, ignore.case = TRUE)], collapse = "|")
+    id <- grepl(crel, CallQual$RESULT, ignore.case = TRUE) 
+    CallQual$RESULT[id] <- gsub(crel, "ReferredCREL", CallQual$RESULT[id], ignore.case = TRUE)
+    
+    result <- unique(CallQual$RESULT)
+    
+    split <- strsplit(result, "\\W+")
+    
+    wordcount <- vapply(split, length, integer(1))
+    
+    keys <- result[wordcount <= 2]
+    
+    keys <- keys[!tolower(keys) %in% tolower(names)]
+    
+    id <- !(CallQual$RESULT %in% keys)
+    
+    CallQual$MEMO_POS2[id] <- str_trim(paste(CallQual$MEMO_POS2[id], CallQual$RESULT[id], sep = " "))
+    
+    CallQual$RESULT[id] <- ""
+    
+    CallQual[,17:24][is.na(CallQual[,17:24])] <- ""
+    
+    idx <- grepl("[0-9]+/[0-9]+/[0-9]+", CallQual$USES)
+    
+    idx.2 <- !is.na(CallQual$MEMO_POS10)
+    
+    CallQual[idx & idx.2,]$MEMO_POS9 <- paste(CallQual[idx & idx.2,]$MEMO_POS9, CallQual[idx & idx.2,]$MEMO_POS10)
+    
+    CallQual[idx,25:33] <- CallQual[idx,26:34]
+    
+    idx <- !grepl("^RES|^NONRES", CallQual$USES)
+    
+    idx.2 <- !is.na(CallQual$MEMO_POS10)
+    
+    CallQual[idx & idx.2,]$MEMO_POS9 <- paste(CallQual[idx & idx.2,]$MEMO_POS9, CallQual[idx & idx.2,]$MEMO_POS10)
+    
+    CallQual[idx,25:33] <- CallQual[idx,26:34]
+    
+    CallQual <- CallQual %>%
+                 mutate(MEMO = paste(MEMO_POS3, 
+                                    MEMO_POS4,
+                                    MEMO_POS5,
+                                    MEMO_POS6,
+                                    MEMO_POS7,
+                                    MEMO_POS8,
+                                    MEMO_POS9,
+                                    MEMO_POS10,
+                                    sep = " "))
+    
+    
+    
+    
+return(CallQual)
+}
+
+CallQual2 <- Clean(CallQual) #to do: need to fix ENQUIRY = FALSE#
+
+rm(CallQual3)
+
+dbWriteTable(con=conn,
+             name="CallQual4",
+             value=CallQual4,
+             row.names=FALSE,
+             append=TRUE)
+
+CallQual4 <- dbReadTable(con=conn,
+                         name="CallQual4")
+
+CallQual5 <- CallQual4[!grepl("^RES|NONRES", CallQual4$USES),] 
+
+row.names(CallQual5) <- CallQual5$MEMO_ID
+
+x <- apply(CallQual5, 1, function(x) which(grepl("^RES|^NONRES", x) == TRUE))
+
+loc <- which(colnames(CallQual5) == "MEMO_POS10")
+
+x[lapply(x,length) == 0] <- 26
+
+gap <- lapply(x, function(x) seq(from = loc, to=x-1))
+
+MEMO_POS10 <- lapply(1:nrow(CallQual5), function(i) CallQual5[gap[[i]], ]) 
+
+x <- unlist(unname(x))
+
+CallQual[idx,25:33]
+
+y <- lapply(1:nrow(CallQual5), function(i) CallQual5[[i,x[i]]]) 
+
+dbWriteTable(con=conn,
+             name="CallQual5",
+             value=CallQual5,
+             row.names=FALSE,
+             append=TRUE)
+
+cols <- vapply(CallQual4, is.character, logical(1))
+
+CallQual4[ , cols] <- apply(CallQual4[ , cols], 2, str_trim)
+CallQual4[ , cols] <- apply(CallQual4[ , cols], 2, toupper)
+
+dbWriteTable(con=conn,
+             name="Callqual_281116",
+             value=CallQual4,
+             row.names=FALSE,
+             append=TRUE)
+
+
+#CallQual2$ENQUIRY = sapply(CallQual2$MEMO_POS1, Enquiry)
+result = lapply(CallQual2$MEMO_POS2, Result)
+names(result) <- CallQual2$MEMO_CONSUMER
+result_tbl <- ldply(result)
+
+
+```
+
+Create a call ID
+
+```{r Call ID}
+
+#CallQual2 <- CallQual3
+
+#CallQual3 <- data.table(CallQual2)
+
+#CallID1 <- CallQual3[, MEMO_DATETIME := ymd_hms(MEMO_DATETIME)][, time_window := MEMO_DATETIME + minutes(5)][,.(MEMO_CONSUMER, MEMO_ID, #MEMO_DATETIME, time_window)]
+
+#setkey(CallID1, MEMO_DATETIME, time_window)
+
+#CallID2 <- CallQual3[, MEMO_DATETIME := ymd_hms(MEMO_DATETIME)][, dummy := MEMO_DATETIME][,.(MEMO_CONSUMER, MEMO_ID, MEMO_DATETIME, dummy)]
+
+#CallID3 <- sqldf("SELECT DISTINCT 
+                  #a.MEMO_CONSUMER,
+                  #a.MEMO_ID,
+                  #a.MEMO_ID AS id,
+                  #b.MEMO_ID AS parent
+                  #FROM CallQual3 a
+                  #LEFT JOIN CallQual3 b ON datetime(b.MEMO_DATETIME) >= (datetime(a.MEMO_DATETIME) - 'interval 5 mins') 
+                  #AND datetime(b.MEMO_DATETIME) <= datetime(a.MEMO_DATETIME) 
+                  #AND b.MEMO_CONSUMER = a.MEMO_CONSUMER 
+                  #AND b.MEMO_ID <> a.MEMO_ID",
+                  #drv = 'SQLite')
+
+#Memo_call <- foverlaps(CallID2, 
+                       #CallID1, 
+                       #by.x=c("MEMO_DATETIME", "dummy"), 
+                       #type = "within", 
+                       #mult = "all")
+
+Memo_calls <- dbReadTable(con=conn,
+                         name="memo_calls")
+
+x <- Memo_calls[Memo_calls$MEMO_CONSUMER == 22513504514,][,3:4]
+x <- Memo_calls[Memo_calls$MEMO_CONSUMER == 22513554612,][,3:4]
+
+path <- function(x) {
+  #data.frame(id = x[,1], parent = x[,dim(x)[2]])
+  df <- x
+  while(any(!is.na(df[,dim(df)[2]]))) {
+    
+    df <- left_join(x, df, by = c("id" = "parent"))
+    #df <- left_join(x, x[,c(dim(x)[2] -1,dim(x)[2])], by = c("id" = "parent"))
+    
+    #df2 <- df[,c(dim(df)[2], 1)] 
+    
+    #colnames(df2)[1] <- "id"
+    
+    #x <- union_all(df, df2)
+  
+  }
+  
+  df2 <- gather(df, join, child, 4:ncol(df)) %>% filter(is.na(parent))
+  df3 <- df2 %>% filter(!is.na(child)) %>% select(child,id)
+  colnames(df3) <- c("id", "parent")
+  
+  result <- rbind(df2 %>% select(id, parent), df3) %>% distinct()
+ 
+  return(result)
+}
+
+library(nlme)
+x <- Memo_calls[,c(1,3:4)]
+
+y <- x %>% sample_n(100) %>% mutate(ID = MEMO_CONSUMER) %>% select(ID, id, parent) %>% group_by(ID)
+
+z <- gapply(y, path)
+
+result <- path(x)
+
+
+gps <- data.frame(lapply(parents, is.na))
+
+parents <- parents[unlist(lapply(1:nrow(gps), function(i) all(gps[i,3:ncol(gps)] == TRUE))) == FALSE,]
+
+gps <- data.frame(lapply(parents, is.na))
+
+parents[!gps] <- NULL
+
+
+apply(gps,1,function(x) all())
+
+path <- function(x) {
+  
+  #if(all(is.na(x[,dim(x)[2]]))) {
+  
+    #x[,dim(x)[2] + 1] <- left_join(x, x, by = c("id" = "parent"))
+    
+  #}
+  
+  if(any(!is.na(x[,dim(x)[2]]))) {  
+  
+    x[,dim(x)[2] + 1] <- left_join(x, path(x), by = c("id" = "parent"))$id.y
+    #df <- %>% distinct
+    }
+
+}
+
+#Memo_call<- Memo_call[MEMO_ID == i.MEMO_ID, i.MEMO_ID := 0][MEMO_ID != i.MEMO_ID & MEMO_CONSUMER == i.MEMO_CONSUMER][,.(MEMO_CONSUMER, #MEMO_ID,i.MEMO_ID)][, parent := MEMO_ID]
+
+#names(Memo_call) <- c("MEMO_CONSUMER","MEMO_ID","parent","id" )
+
+#Memo_call2 <- Memo_call[order(-rank(MEMO_CONSUMER), MEMO_ID)]
+
+#Memo_call3 <- Memo_call2[]
+
+```
+
+
+
+```{r Key Accounts, eval=FALSE, include=FALSE, echo=FALSE}
+PropertyLayer <- read.csv("file:///N:/KarlBlackhall/Gentrack AL/PROPERTY_LAYER_1516FY (Q1-Q4).csv",
+                          stringsAsFactors = FALSE) %>%
+                 mutate(ACC_NAME = gsub("[[:space:]]|[^[:alnum:]]", "", ACCOUNT_NAME))
+
+KeyAccounts <- read.csv("file:///C:/Enquiries/data/KeyAccounts.csv",
+                        stringsAsFactors = FALSE) %>%
+               mutate(ACCOUNT_NAME = str_trim(gsub("(.+)(\\(.+)", "\\1", Key.Customer))) %>%
+               select(ACCOUNT_NAME) 
+
+
+KeyAccountsName <- unique(gsub("[[:space:]]|[^[:alnum:]]", "", KeyAccounts$ACCOUNT_NAME))
+
+link <- lapply(KeyAccountsName, function(x) PropertyLayer$MASTERID[which(grepl(x, PropertyLayer$ACC_NAME, ignore.case = TRUE) == TRUE)])
+
+KeyAccountsID <- data.frame(MASTERID = unlist(link)) %>%
+                 left_join(select(PropertyLayer, MASTERID, ACCOUNT_NAME)) %>%
+                 distinct()
+
+write.csv(KeyAccountsID, "data/KeyAccountsID.csv")
+
+```
+
+```{r Trade Waste}
+
+
+```
+
+```{r Annual plot}
+
+EnquiryCountAnnual <- ddply(CallQual2, .(ENQUIRY, USES), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      arrange(-Total) %>%
+                      select(USES,
+                             ENQUIRY,
+                             Total)
+
+p1Annual <- ggplot(data = EnquiryCountAnnual,
+             aes(x = factor(USES),
+                 fill= factor(ENQUIRY),
+                 y = Total)) 
+
+p1Annual <- p1Annual + geom_bar(stat="identity")
+
+#p1Annual <- p1Annual + facet_grid(facets=USES~SRM)
+
+```
+
+```{r Random code, eval=FALSE, include=FALSE, echo=FALSE}
+
+CallQual3 <- CallQual %>% 
+             select(-MEMO_POS1:-MEMO_POS10) %>% 
+             cbind(MemoNotes) %>% 
+             mutate(SRM = ifelse(!is.na(SR_SERV_CODE), TRUE, FALSE),
+                    MEMO_DATETIME = ymd_hms(format(MEMO_DATETIME, format="%d-%m-%y %H:%M:%S")),
+                    SR_DATETIME = ymd_hms(format(SR_DATETIME, format="%d-%m-%y %H:%M:%S")),
+                    CUS_BIRTHDATE = dmy(format(CUS_BIRTHDATE, format="%d/%m/%y")),
+                    STAT_DATE = dmy(format(STAT_DATE, format="%d/%m/%y"))) %>%
+             arrange(MEMO_CONSUMER, MEMO_DATETIME) #%>%
+             #mutate(TIME_DIFF = difftime(MEMO_DATETIME, lag(MEMO_DATETIME, 1), units = "mins"),
+                    #CALL_ID = seq(1, length(MEMO_CONSUMER), by = 1),
+                    #CONSUMER_LAG = lag(MEMO_CONSUMER, 1)) %>%
+                    #mutate(CALL_ID = ifelse(TIME_DIFF >= 0 & TIME_DIFF <= 5 & CONSUMER_LAG == MEMO_CONSUMER, lag(CALL_ID, 1), CALL_ID)) %>%
+                    #mutate(CALL_ID2 = ifelse(CALL_ID == lag(CALL_ID, 1), CALL_ID, lag(CALL_ID, 1) + 1))
+
+#CallQual4 <- CallQual3[-problems(CallQual)$row,]
+
+#CWW_DW <- odbcDriverConnect(connection="Driver={SQL Server Native Client 11.0};
+                            #server=wvdb1devsql;
+                            #database=CWW_DW;
+                            #uid=report;
+                            #pwd=report")
+
+#sqlSave(CWW_DW, CallQual, tablename='ABR_callqual_1516', rownames=F)
+
+dbWriteTable(con=conn,
+             name="dbo.abr_callqual_1516",
+             value=CallQual2,
+             row.names=FALSE,
+             append=TRUE)
+
+lines <- readLines("C:/Enquiries/SQL/Create_tables.sql", skipNul = TRUE)
+
+sql_command =  paste(lines, collapse=" ")
+
+dbGetQuery(sql_command, con = conn)
+
+lines <- readLines("C:/Enquiries/SQL/Memo_id.sql", skipNul = TRUE)
+
+sql_command =  paste(lines, collapse=" ")
+
+dbGetQuery(sql_command, con = conn)
+
+Unique_MEC <- unique(CallQual4$MEC)
+Unique_MEC1 <- unique(CallQual4$MEC.1)
+
+CallQual4 <- CallQual3 %>%
+             select(MEMO_CONSUMER, 
+                    MEMO_DATETIME,
+                    TIME_DIFF,
+                    CALL_ID,
+                    CONSUMER_LAG)
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

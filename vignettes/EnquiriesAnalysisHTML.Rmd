@@ -3,15 +3,17 @@ title: "EnquiriesAnalysisHTML"
 author: "Phil Farrell"
 date: "15 December 2016"
 output:
-  html_document: default
-  pdf_document:
-    latex_engine: xelatex
+  html_document: 
+    fig_caption: yes
+    fig_height: 8
+    fig_width: 10
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-packages <- c("readr", "dplyr", "plyr", "tidyr", "ggplot2", "stringr", "lubridate", "sqldf", "randomNames", "data.table", "devtools")
+packages <- c("readr", "dplyr", "plyr", "tidyr", "ggplot2", "stringr", "lubridate", "sqldf", "randomNames", "data.table", "devtools", "scales", "knitr", "xtable", "stringi")
 
 p <- installed.packages()
 
@@ -29,111 +31,11 @@ lapply(packages, require, character.only = TRUE)
 
 ```
 
-## Analysis of all call qualifier data
-
-read in the annual call qualifier data 
-
-```{r load, message=FALSE, warning=FALSE, cache=TRUE, include=FALSE}
+```{r load, message=FALSE, warning=FALSE, include=FALSE}
 #conn <- ABR::PostgreSQLconnect()
 
 CallQual <- read_delim("N:/ABR/GENTRACK DATA/data AGAIN  for phil 22 nov.txt", 
                     delim = "|", quote = "") #quote = "" is important to avoid parsing failures
-
-```
-
-```{r fix parsing fails, eval=FALSE, include=FALSE, echo=FALSE}
- 
-Clean_df <- function(input) {
-#     probs_location <- input[problems(input)$row,]
-#     # 
-#     col <- unique(problems(input)$col[!is.na(problems(input)$col)])
-#     # 
-#     col <- vapply(col, function(x) which(x == colnames(input)), numeric(1))
-#     # 
-#     probs <- data.frame(problems(input)) %>% select(row, col) %>% distinct
-#     # 
-#     # probs$idx <- ""
-#     # probs$idx[!is.na(probs$col)] <- as.numeric(vapply(probs$col[!is.na(probs$col)], function(x) col[x], numeric(1))) 
-#     # 
-#     # probs$idx <- as.numeric(probs$idx)
-#     # 
-#     # probs$df <- ""
-#     # 
-#     # probs$df[!is.na(probs$idx)] <- unname(vapply(which(!is.na(probs$idx)), function(i) grepl("\\r\\n", input[[probs$row[i], probs$idx[i]]]), logical(1)))
-#   
-#     loc <- lapply(CallQual, function(x) grepl("\\r\\n", x)) 
-#     
-#     test1 <- vapply(loc, function(x) any(x == TRUE), logical(1))
-#     
-#     probs <- loc[test1]
-#     
-#     rm(loc)
-#     
-#     x <- probs[1]
-#     
-#     y <- CallQual[unlist(x),names(x)]
-#     
-#     y$tbl <- gsub("(.*)\\r\\n(.*)*", "\\2", y$MEMO_POS3)
-#     
-#     y$MEMO_POS3 <- gsub("(.*)\\r\\n(.*)", "\\1", y$MEMO_POS3)
-#     
-#     new <- read_delim(y$tbl[1], 
-#                     delim = "|") 
-#     test <- y$tbl[1]
-#     
-#     #loc <- regexec("\\|[^\\|]*(\\r\\n)[^\\|]*\\|", test, value=TRUE)
-#     
-#     x <- gsub("(\\|[^\\|]*)(\\r\\n)([^\\|]*\\|)*", "\\1 \\3", test)
-#     
-#     new <- read_delim(x, delim = "|", col_names = FALSE) 
-#     
-#     gsub("(.*)(\\r\\n)(.*)", "\\3", test)
-#     
-#     df <- probs[probs$df == TRUE,]
-#     
-#     if(nrow(df) == 0) {
-#       return(NA)
-#     }
-#     
-#     #dfs <- lapply(1:nrow(df), function(i) Clean_df(read_delim(input[[df$row[i], df$idx[i]]], delim = "|", skip = 1, col_names = FALSE)))
-#     
-#     dfs <- lapply(1:nrow(df), function(i) c(dfs, input[[df$row[i], df$idx[i]]]))
-#     
-#     dfs2 <- lapply(1:nrow(df), function(i) c(dfs, Clean_df(read_delim(input[[df$row[i], df$idx[i]]], delim = "|", skip = 1, col_names = FALSE))))
-#     
-#     
-# return(unlist(dfs2))
-# 
-# }
-# 
-# dfs <- ""
-# 
-# clean <- Clean_df(CallQual)
-# 
-# clean2 <- unique(clean[!is.na(clean) & clean != ""])
-# 
-# correct2 <- lapply(clean2, function(x) read_delim(x, delim = "|", skip = 1, col_names = FALSE))
-# 
-# #correct3 <- correct2[lapply(correct2, !is.na)]
-# 
-# cor_time <- function(df) {
-# 
-#   x <- df[lapply(df, is.POSIXct) == TRUE] 
-#   df[lapply(df, is.POSIXct) == TRUE] <- lapply(x, function(x) dmy_hms(format(x, format="%y-%m-%d %H:%M:%S")))
-#   
-#   return(df)
- }
-# 
-# correct3 <- ldply(correct2, cor_time) %>% distinct
-# 
-# colnames(correct3) <- colnames(CallQual)
-# 
-# CallQual2 <- cor_time(CallQual) %>% distinct
-# 
-# CallQual3 <- rbind(correct3, CallQual2) %>% distinct
-# 
-# rm(CallQual, CallQual2, correct2, correct3, clean, clean2)
-
 
 ```
 
@@ -194,6 +96,12 @@ Clean <- function(CallQual) {
     lapply(names(idx), function(i) CallQual$ENQUIRY[idx[[i]]] <<- i)
     
     split <- strsplit(enquiry, "\\W+")
+    
+    if(length(CallQual[CallQual$ENQUIRY == "CUSTOMER CORRESPONDENCDE",]$ENQUIRY != 0)) {
+    
+      CallQual[CallQual$ENQUIRY == "CUSTOMER CORRESPONDENCDE",]$ENQUIRY <- "CUSTOMER CORRESPONDENCE"
+      
+    }
     
     # idx <- lapply(split, function(x) any(tolower(x) == tolower(names)))
     
@@ -403,166 +311,21 @@ CallQual3 <- Clean(CallQual2) #to do: need to fix ENQUIRY = FALSE#
 
 rm(CallQual2)
 
-# dbWriteTable(con=conn,
-#              name="CallQual3",
-#              value=CallQual3,
-#              row.names=FALSE,
-#              append=FALSE)
-# 
-# CallQual3 <- dbReadTable(con=conn,
-#                          name="CallQual3")
-
-# CallQual5 <- CallQual4[!grepl("^RES|NONRES", CallQual4$USES),] 
-# 
-# row.names(CallQual5) <- CallQual5$MEMO_ID
-# 
-# x <- apply(CallQual5, 1, function(x) which(grepl("^RES|^NONRES", x) == TRUE))
-# 
-# loc <- which(colnames(CallQual5) == "MEMO_POS10")
-# 
-# x[lapply(x,length) == 0] <- 26
-# 
-# gap <- lapply(x, function(x) seq(from = loc, to=x-1))
-# 
-# MEMO_POS10 <- lapply(1:nrow(CallQual5), function(i) CallQual5[gap[[i]], ]) 
-# 
-# x <- unlist(unname(x))
-# 
-# CallQual[idx,25:33]
-# 
-# y <- lapply(1:nrow(CallQual5), function(i) CallQual5[[i,x[i]]]) 
-
-# dbWriteTable(con=conn,
-#              name="CallQual5",
-#              value=CallQual5,
-#              row.names=FALSE,
-#              append=TRUE)
-
 cols <- vapply(CallQual3, is.character, logical(1))
 
 CallQual3[ , cols] <- apply(CallQual3[ , cols], 2, str_trim)
 CallQual3[ , cols] <- apply(CallQual3[ , cols], 2, toupper)
 
-# dbWriteTable(con=conn,
-#              name="Callqual_281116",
-#              value=CallQual4,
-#              row.names=FALSE,
-#              append=TRUE)
-
-
-#CallQual2$ENQUIRY = sapply(CallQual2$MEMO_POS1, Enquiry)
-# result = lapply(CallQual2$MEMO_POS2, Result)
-# names(result) <- CallQual2$MEMO_CONSUMER
-# result_tbl <- ldply(result)
-
-
 ```
 
-```{r Call ID, eval=FALSE, include=FALSE, echo=FALSE}
+```{r Date time, message=FALSE, warning=FALSE, include=FALSE}
 
-#CallQual2 <- CallQual3
-
-#CallQual3 <- data.table(CallQual2)
-
-#CallID1 <- CallQual3[, MEMO_DATETIME := ymd_hms(MEMO_DATETIME)][, time_window := MEMO_DATETIME + minutes(5)][,.(MEMO_CONSUMER, MEMO_ID, #MEMO_DATETIME, time_window)]
-
-#setkey(CallID1, MEMO_DATETIME, time_window)
-
-#CallID2 <- CallQual3[, MEMO_DATETIME := ymd_hms(MEMO_DATETIME)][, dummy := MEMO_DATETIME][,.(MEMO_CONSUMER, MEMO_ID, MEMO_DATETIME, dummy)]
-
-#CallID3 <- sqldf("SELECT DISTINCT 
-                  #a.MEMO_CONSUMER,
-                  #a.MEMO_ID,
-                  #a.MEMO_ID AS id,
-                  #b.MEMO_ID AS parent
-                  #FROM CallQual3 a
-                  #LEFT JOIN CallQual3 b ON datetime(b.MEMO_DATETIME) >= (datetime(a.MEMO_DATETIME) - 'interval 5 mins') 
-                  #AND datetime(b.MEMO_DATETIME) <= datetime(a.MEMO_DATETIME) 
-                  #AND b.MEMO_CONSUMER = a.MEMO_CONSUMER 
-                  #AND b.MEMO_ID <> a.MEMO_ID",
-                  #drv = 'SQLite')
-
-#Memo_call <- foverlaps(CallID2, 
-                       #CallID1, 
-                       #by.x=c("MEMO_DATETIME", "dummy"), 
-                       #type = "within", 
-                       #mult = "all")
-
-# Memo_calls <- dbReadTable(con=conn,
-#                          name="memo_calls")
-# 
-# x <- Memo_calls[Memo_calls$MEMO_CONSUMER == 22513504514,][,3:4]
-# x <- Memo_calls[Memo_calls$MEMO_CONSUMER == 22513554612,][,3:4]
-# 
-# path <- function(x) {
-#   #data.frame(id = x[,1], parent = x[,dim(x)[2]])
-#   df <- x
-#   while(any(!is.na(df[,dim(df)[2]]))) {
-#     
-#     df <- left_join(x, df, by = c("id" = "parent"))
-#     #df <- left_join(x, x[,c(dim(x)[2] -1,dim(x)[2])], by = c("id" = "parent"))
-#     
-#     #df2 <- df[,c(dim(df)[2], 1)] 
-#     
-#     #colnames(df2)[1] <- "id"
-#     
-#     #x <- union_all(df, df2)
-#   
-#   }
-#   
-#   df2 <- gather(df, join, child, 4:ncol(df)) %>% filter(is.na(parent))
-#   df3 <- df2 %>% filter(!is.na(child)) %>% select(child,id)
-#   colnames(df3) <- c("id", "parent")
-#   
-#   result <- rbind(df2 %>% select(id, parent), df3) %>% distinct()
-#  
-#   return(result)
-# }
-# 
-# library(nlme)
-# x <- Memo_calls[,c(1,3:4)]
-# 
-# y <- x %>% sample_n(100) %>% mutate(ID = MEMO_CONSUMER) %>% select(ID, id, parent) %>% group_by(ID)
-# 
-# z <- gapply(y, path)
-# 
-# result <- path(x)
-# 
-# 
-# gps <- data.frame(lapply(parents, is.na))
-# 
-# parents <- parents[unlist(lapply(1:nrow(gps), function(i) all(gps[i,3:ncol(gps)] == TRUE))) == FALSE,]
-# 
-# gps <- data.frame(lapply(parents, is.na))
-# 
-# parents[!gps] <- NULL
-# 
-# 
-# apply(gps,1,function(x) all())
-# 
-# path <- function(x) {
-#   
-#   #if(all(is.na(x[,dim(x)[2]]))) {
-#   
-#     #x[,dim(x)[2] + 1] <- left_join(x, x, by = c("id" = "parent"))
-#     
-#   #}
-#   
-#   if(any(!is.na(x[,dim(x)[2]]))) {  
-#   
-#     x[,dim(x)[2] + 1] <- left_join(x, path(x), by = c("id" = "parent"))$id.y
-#     #df <- %>% distinct
-#     }
-# 
-# }
-# 
-# #Memo_call<- Memo_call[MEMO_ID == i.MEMO_ID, i.MEMO_ID := 0][MEMO_ID != i.MEMO_ID & MEMO_CONSUMER == i.MEMO_CONSUMER][,.(MEMO_CONSUMER, #MEMO_ID,i.MEMO_ID)][, parent := MEMO_ID]
-# 
-# #names(Memo_call) <- c("MEMO_CONSUMER","MEMO_ID","parent","id" )
-# 
-# #Memo_call2 <- Memo_call[order(-rank(MEMO_CONSUMER), MEMO_ID)]
-# 
-# #Memo_call3 <- Memo_call2[]
+CallQual3 <- CallQual3 %>%
+                    mutate(SRM = ifelse(!is.na(SR_SERV_CODE), TRUE, FALSE),
+                    MEMO_DATETIME = parse_date_time(MEMO_DATETIME, orders="%d-%m-%y %H:%M:%S"),
+                    SR_DATETIME = parse_date_time(SR_DATETIME, orders="%d-%m-%y %H:%M:%S"),
+                    CUS_BIRTHDATE = dmy(format(CUS_BIRTHDATE, format="%d/%m/%y")),
+                    STAT_DATE = dmy(format(STAT_DATE, format="%d/%m/%y")))
 
 ```
 
@@ -589,17 +352,29 @@ write.csv(KeyAccountsID, "C:/Enquiries/data/KeyAccountsID.csv")
 
 KeyAccountsID <- read.csv("C:/Enquiries/data/KeyAccountsID.csv")
 
+CallQual3$KEY_ACCOUNT <- "KEY_ACCOUNT"
+
+CallQual3[!(as.numeric(substr(CallQual3$MEMO_CONSUMER, 3, 9)) %in% KeyAccountsID),]$KEY_ACCOUNT <- "NON_KEY"
+
 ```
 
-```{r Trade Waste}
+```{r Gentrack Acc type, message=FALSE, warning=FALSE, include=FALSE}
 
+CallQual3$ACC_TYPE <- "TENANT"
+
+CallQual3[substr(CallQual3$MEMO_CONSUMER, 1, 2) == 12,]$ACC_TYPE <- "OWNER"
+
+CallQual3[substr(CallQual3$MEMO_CONSUMER, 1, 2) == 32,]$ACC_TYPE <- "TRADE_WASTE"
+
+CallQual3[substr(CallQual3$MEMO_CONSUMER, 1, 2) == 99,]$ACC_TYPE <- "99"
+
+CallQual3[substr(CallQual3$MEMO_CONSUMER, 1, 2) == 99,]$ACC_TYPE <- "99"
 
 ```
 
-####Total count of enquiries leading to an SRM
+####High level summary
 
-
-```{r Annual plots, echo=FALSE, message=FALSE, warning=FALSE}
+```{r overall summary, message=FALSE, warning=FALSE, include=FALSE}
 
 CallQual3$SRM <- ifelse(!is.na(CallQual3$SR_SERV_CODE), "SRM", "RESOLVED")   
 
@@ -621,38 +396,189 @@ EnquiryCountAnnual <- ddply(EnquiryCountAnnual, .(ENQUIRY, USES, SRM), summarise
                              ENQUIRY,
                              Total)
 
-p1Annual <- ggplot(data = EnquiryCountAnnual,
+```
+
+There were `r sum(EnquiryCountAnnual$Total)` customer Enquiries logged in Gentrack between Jun 2014 and July 2016. This is broken down by year into:
+
+```{r xtable1, echo=FALSE, results="asis"}
+
+FY15 <- interval(ymd(20140701), ymd(20150630))
+FY16 <- interval(ymd(20150701), ymd(20160630))
+                                                             
+CallQual3$FY <- ifelse(CallQual3$MEMO_DATETIME %within% FY15, 2015, 2016)
+
+FYSummary <- ddply(CallQual3, .(FY, USES), summarise, Total = length(MEMO_CONSUMER)) %>%
+             spread(USES, Total) %>%
+             mutate(TotalEnquiries = NONRES + RES)
+
+print(xtable(FYSummary), type = "html")
+
+
+```
+
+<!-- * 2015 Financial year: `r sum(FYSummary[FYSummary$FY == 2015,]$Total)` -->
+<!--   + RES: `r FYSummary[FYSummary$FY == 2015 & FYSummary$USES == "RES",]$Total` -->
+<!--   + NONRES: `r FYSummary[FYSummary$FY == 2015 & FYSummary$USES == "NONRES",]$Total` -->
+<!-- * 2016 Financial year: `r sum(FYSummary[FYSummary$FY == 2016,]$Total)` -->
+<!--   + RES: `r FYSummary[FYSummary$FY == 2016 & FYSummary$USES == "RES",]$Total` -->
+<!--   + NONRES: `r FYSummary[FYSummary$FY == 2016 & FYSummary$USES == "NONRES",]$Total` -->
+
+```{r Financial year + SRM summary, message=FALSE, warning=FALSE, include=FALSE}
+
+FYSRMSummary <- ddply(CallQual3, .(FY, USES, SRM), summarise, Total = length(MEMO_CONSUMER)) %>%
+             # spread(SRM, Total) %>%
+             # mutate(TotalEnquiries = NONRES + RES)
+                arrange(FY, USES, -Total)
+
+
+```
+
+
+`r sum(FYSRMSummary[FYSRMSummary$SRM == "SRM",]$Total)` enquiries, or `r paste(round(100 * sum(FYSRMSummary[FYSRMSummary$SRM == "SRM",]$Total)/ sum(FYSRMSummary$Total), 1), "%", sep="")` of all enquiries, resulted in an SRM being created between Jun 2014 and July 2016. This is broken down in the plot below.
+
+```{r Plot1, echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+
+p1Annual <- ggplot(data = FYSRMSummary %>% arrange(-Total) %>% filter(SRM == "SRM"),
              aes(x = factor(USES),
-                 fill= factor(ENQUIRY),
+                 fill= factor(SRM),
                  y = Total)) 
 
 p1Annual <- p1Annual + geom_bar(stat="identity")
 
-p1Annual <- p1Annual + facet_grid(facets=~SRM)
+p1Annual <- p1Annual + facet_grid(facets=~FY)
+
+p1Annual <- p1Annual + scale_y_continuous(labels = comma)
+
+p1Annual
+
+
+```
+
+
+As a group `r round(100 * sum(FYSRMSummary[FYSRMSummary$SRM == "SRM" & FYSRMSummary$USES == "NONRES", 4])/ sum(FYSRMSummary[FYSRMSummary$USES == "NONRES", 4]), 1)`% of all non-residential customers' enquiries resulted in an SRM between Jun 2014 and July 2016. This is compared to a rate of `r round(100 * sum(FYSRMSummary[FYSRMSummary$SRM == "SRM" & FYSRMSummary$USES == "RES", 4])/ sum(FYSRMSummary[FYSRMSummary$USES == "RES", 4]), 1)`% of residential enquiries generateing an SRM over the same time period.   
+
+```{r Annual SRM summary, include=FALSE}
+
+SRM_enquiry <- ddply(CallQual3 %>% filter(SRM == "SRM"), .(USES, ENQUIRY, FY), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      arrange(-Total) #%>%
+                      #mutate(cumulative = cumsum(Total)/sum(Total))# %>%
+                      # filter(cumulative < 0.93)
+
+SRM_enquiry_RES <- SRM_enquiry%>%
+                   filter(USES == "RES") %>%
+                   arrange(-Total) %>%
+                   mutate(cumulative = cumsum(Total)/sum(Total)) %>%
+                   filter(cumulative < 0.99)
+
+SRM_enquiry[SRM_enquiry$USES == "RES" & !(SRM_enquiry$ENQUIRY %in% SRM_enquiry_RES$ENQUIRY), ]$ENQUIRY <- "OTHER"
+
+TopThree_RES <- SRM_enquiry_RES %>% 
+                head(3) %>% 
+                mutate(ENQUIRY = stri_trans_totitle(ENQUIRY)) %>% 
+                .[["ENQUIRY"]]
+
+SRM_enquiry_NRES <- SRM_enquiry%>%
+                   filter(USES == "NONRES") %>%
+                   arrange(-Total) %>%
+                   mutate(cumulative = cumsum(Total)/sum(Total)) %>%
+                   filter(cumulative < 0.99)
+
+SRM_enquiry[SRM_enquiry$USES == "NONRES" & !(SRM_enquiry$ENQUIRY %in% SRM_enquiry_NRES$ENQUIRY), ]$ENQUIRY <- "OTHER"
+
+TopThree_NRES <- SRM_enquiry_NRES %>% 
+                head(3) %>% 
+                mutate(ENQUIRY = stri_trans_totitle(ENQUIRY)) %>% 
+                .[["ENQUIRY"]]
+
+SRM_enquiry <- aggregate(Total ~ USES + ENQUIRY + FY, SRM_enquiry, sum)
+
+SRM_enquiry <- SRM_enquiry %>%
+               arrange(Total)
+
+
+
+```
+
+
+The graph below shows that the top three enquiry types ending up as SRMs were `r TopThree_NRES[1:2]` and `r TopThree_NRES[3]` for non-residential as well as `r TopThree_RES[1:2]` and `r TopThree_RES[3]` for residential customers. 
+
+```{r Annual SRM plots, echo=FALSE, message=FALSE, warning=FALSE}
+
+# CallQual3$SRM <- ifelse(!is.na(CallQual3$SR_SERV_CODE), "SRM", "RESOLVED")   
+
+# x <- length(unique(CallQual3$MEMO_CONSUMER))
+
+SRM_enquiry$ENQUIRY <- factor(SRM_enquiry$ENQUIRY, levels = SRM_enquiry$ENQUIRY)
+
+p1Annual <- ggplot(data = SRM_enquiry,
+             aes(x = USES,
+                 y = Total,
+                 fill= ENQUIRY
+                 )) 
+
+p1Annual <- p1Annual + geom_bar(stat="identity")
+
+#p1Annual <- p1Annual + facet_grid(facets=~FY)
+
+p1Annual 
+
+# p1Annual <- ggplot(data = EnquiryCountAnnual,
+#              aes(x = factor(USES),
+#                  fill= factor(ENQUIRY),
+#                  y = Total)) 
+# 
+# p1Annual <- p1Annual + geom_bar(stat="identity")
+# 
+# p1Annual
+
+# EnquiryCountAnnual <- CallQual3
+# 
+# EnquiryCountAnnual[!(EnquiryCountAnnual$ENQUIRY %in% Filter$ENQUIRY),]$ENQUIRY <- "OTHER"
+# 
+# EnquiryCountAnnual <- ddply(EnquiryCountAnnual, .(ENQUIRY, USES, SRM), summarise, Total = length(MEMO_CONSUMER)) %>%
+#                       arrange(-Total) %>%
+#                       select(USES,
+#                              SRM,
+#                              ENQUIRY,
+#                              Total)
 
 #Filter for SRM == TRUE
 
-Filter <- ddply(CallQual3 %>% filter(SRM == "SRM"), .(ENQUIRY), summarise, Total = length(MEMO_CONSUMER)/x) %>%
-                      arrange(-Total) %>%
-                      mutate(cumulative = cumsum(Total)/sum(Total)) %>%
-                      filter(cumulative < 0.93)
+# Filter <- ddply(CallQual3 %>% filter(SRM == "SRM"), .(ENQUIRY), summarise, Total = length(MEMO_CONSUMER)/x) %>%
+#                       arrange(-Total) %>%
+#                       mutate(cumulative = cumsum(Total)/sum(Total)) %>%
+#                       filter(cumulative < 0.93)
+# 
+# SRMCountAnnual <- CallQual3
+# 
+# SRMCountAnnual[!(SRMCountAnnual$ENQUIRY %in% Filter$ENQUIRY),]$ENQUIRY <- "OTHER"
+# 
+# SRMCountAnnual <- ddply(SRMCountAnnual %>% filter(SRM == "SRM"), .(USES, ENQUIRY), summarise, Total = length(MEMO_CONSUMER))  %>%
+#                       #mutate(Total = 100 * Total/sum(Total)) %>% 
+#                       arrange(USES, -Total)
+# 
+# p2Annual <- ggplot(data = SRMCountAnnual,
+#              aes(x = factor(USES),
+#                  fill= factor(ENQUIRY),
+#                  y = Total)) 
+# 
+# p2Annual <- p2Annual + geom_bar(stat="identity")
 
-SRMCountAnnual <- CallQual3
+#p2Annual <- p2Annual + scale_y_continuous(labels = percent)
 
-SRMCountAnnual[!(SRMCountAnnual$ENQUIRY %in% Filter$ENQUIRY),]$ENQUIRY <- "OTHER"
+#p2Annual <- p2Annual + facet_grid(facets=~USES)
 
-p2Annual <- ggplot(data = ddply(SRMCountAnnual %>% filter(SRM == "SRM"), .(USES, ENQUIRY), summarise, Total = length(MEMO_CONSUMER))  %>%
-                      arrange(-Total),
-             aes(x = factor(USES),
-                 fill= factor(ENQUIRY),
-                 y = Total)) 
+# p2Annual
 
-p2Annual <- p2Annual + geom_bar(stat="identity")
-
-#p2Annual <- p2Annual + facet_grid(facets=~SRM)
-p2Annual
-
+#
+#p2Annual
+#selectInput("p2", "", c("", ""))
 ```
+
+
+####Non-residential SRM analsysis
+
+The graph below shows over `r 2 + 2` percent of all customer enquiries between Jun 2014 and July 2016 were resolved at first point of contact. Approximately X percent of all customer enquiries were from residential type customers. 
 
 ```{r Sankey graph, echo=FALSE, message=FALSE, warning=FALSE}
 
@@ -672,18 +598,17 @@ sankeyPlot <- function(df, name){
   )
   sankeyPlot$save(paste(name, '.html', sep = ""))}
 
-
 x <- length(unique(CallQual3$MEMO_CONSUMER))
 
 EnquiryCountAnnual_sankey <- EnquiryCountAnnual
 
 EndUse_enquiry <- aggregate(Total ~ USES + ENQUIRY, EnquiryCountAnnual, sum) %>%
-                  mutate(Total = Total/x)
+                  mutate(Total = Total/sum(Total))
 
 colnames(EndUse_enquiry) <- c("source", "target", "value")
 
 Enquiry_SRM <- aggregate(Total ~ ENQUIRY + SRM, EnquiryCountAnnual, sum) %>%
-                  mutate(Total = Total/x)
+                  mutate(Total = Total/sum(Total))
 
 colnames(Enquiry_SRM) <- c("source", "target", "value")
 
@@ -704,23 +629,13 @@ htmltools::includeHTML("C:/Enquiries/data/Enduse_SRM.html")
 
 ```
 
+Over 40,000 enquiries between Jun 2014 and July 2016 
+
+
+
 ```{r Non-res SRM flow, echo=FALSE, message=FALSE, warning=FALSE}
 
 NONRES_SRM <- CallQual3 %>% filter(SRM == "SRM", USES == "NONRES")
-
-NONRES_SRM$KEY_ACCOUNT <- "KEY_ACCOUNT"
-
-NONRES_SRM[!(as.numeric(substr(NONRES_SRM$MEMO_CONSUMER, 3, 9)) %in% KeyAccountsID),]$KEY_ACCOUNT <- "NON_KEY"
-
-NONRES_SRM$ACC_TYPE <- "TENANT"
-
-NONRES_SRM[substr(NONRES_SRM$MEMO_CONSUMER, 1, 2) == 12,]$ACC_TYPE <- "OWNER"
-
-NONRES_SRM[substr(NONRES_SRM$MEMO_CONSUMER, 1, 2) == 32,]$ACC_TYPE <- "TRADE_WASTE"
-
-NONRES_SRM[substr(NONRES_SRM$MEMO_CONSUMER, 1, 2) == 99,]$ACC_TYPE <- "99"
-
-NONRES_SRM[substr(NONRES_SRM$MEMO_CONSUMER, 1, 2) == 99,]$ACC_TYPE <- "99"
 
 Users <- read.csv("file:///N:/ABR/Output_2_RootCauseSRMandRepeats/SRSSreports/GentrackUsers.csv",
                   stringsAsFactors = FALSE) %>%

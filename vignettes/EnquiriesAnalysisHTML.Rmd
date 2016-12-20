@@ -32,7 +32,6 @@ lapply(packages, require, character.only = TRUE)
 ```
 
 ```{r load, message=FALSE, warning=FALSE, include=FALSE}
-#conn <- ABR::PostgreSQLconnect()
 
 CallQual <- read_delim("N:/ABR/GENTRACK DATA/data AGAIN  for phil 22 nov.txt", 
                     delim = "|", quote = "") #quote = "" is important to avoid parsing failures
@@ -372,6 +371,69 @@ CallQual3[substr(CallQual3$MEMO_CONSUMER, 1, 2) == 99,]$ACC_TYPE <- "99"
 
 ```
 
+```{r PostgreSQL connect, message=FALSE, warning=FALSE, include=FALSE}
+
+PostgreSQLconnect <- function(dbname = "ABRdb", type = 1, user = NULL, host = NULL) {
+
+  if(!require(RPostgreSQL)) {
+    message("installing the 'RPostgreSQL' package")
+    install.packages("RPostgreSQL")
+  }
+
+  system("C:/bin/pgsql/run.bat")
+
+  Sys.sleep(3)
+
+  # Case 1: local database not requiring username/password
+  if(type == 1) {
+
+    con <- dbConnect(dbDriver("PostgreSQL"), dbname=dbname)
+  }
+
+  # Case 2: local database requiring username/password
+  else if(type == 2) {
+
+    con <- dbConnect(dbDriver("PostgreSQL"), user=user,
+                     password=scan(what=character(),nmax=1,quiet=TRUE), dbname=dbname)
+  }
+
+
+  # Case 3: remote database requiring username/password
+  else {
+    con <- dbConnect(dbDriver("PostgreSQL"), user=user,
+                     password=scan(what=character(),nmax=1,quiet=TRUE), dbname=dbname, host=host)
+  }
+
+  return(con)
+
+}
+
+conn <- PostgreSQLconnect()
+
+```
+
+```{sql connection=conn}
+
+DROP TABLE IF EXISTS callqual3;
+
+
+
+<!-- CallQual3 <- dbReadTable(con=conn, -->
+<!--                          name="CallQual3") -->
+
+
+```
+
+```{r CallQual3 to postgreSQL, message=FALSE, warning=FALSE, include=FALSE}
+
+dbWriteTable(con=conn,
+              name="CallQual3",
+              value=CallQual3,
+              row.names=FALSE,
+              append=FALSE)
+```
+
+
 ####High level summary
 
 ```{r overall summary, message=FALSE, warning=FALSE, include=FALSE}
@@ -398,7 +460,7 @@ EnquiryCountAnnual <- ddply(EnquiryCountAnnual, .(ENQUIRY, USES, SRM), summarise
 
 ```
 
-There were `r sum(EnquiryCountAnnual$Total)` customer Enquiries logged in Gentrack between Jun 2014 and July 2016. This is broken down by year into:
+There were `r sum(EnquiryCountAnnual$Total)` customer Enquiries logged in Gentrack between Jun 2014 and July 2016. This is broken down by year and into customer type in table 1 below.
 
 ```{r xtable1, echo=FALSE, results="asis"}
 
@@ -416,13 +478,6 @@ print(xtable(FYSummary), type = "html")
 
 ```
 
-<!-- * 2015 Financial year: `r sum(FYSummary[FYSummary$FY == 2015,]$Total)` -->
-<!--   + RES: `r FYSummary[FYSummary$FY == 2015 & FYSummary$USES == "RES",]$Total` -->
-<!--   + NONRES: `r FYSummary[FYSummary$FY == 2015 & FYSummary$USES == "NONRES",]$Total` -->
-<!-- * 2016 Financial year: `r sum(FYSummary[FYSummary$FY == 2016,]$Total)` -->
-<!--   + RES: `r FYSummary[FYSummary$FY == 2016 & FYSummary$USES == "RES",]$Total` -->
-<!--   + NONRES: `r FYSummary[FYSummary$FY == 2016 & FYSummary$USES == "NONRES",]$Total` -->
-
 ```{r Financial year + SRM summary, message=FALSE, warning=FALSE, include=FALSE}
 
 FYSRMSummary <- ddply(CallQual3, .(FY, USES, SRM), summarise, Total = length(MEMO_CONSUMER)) %>%
@@ -433,8 +488,10 @@ FYSRMSummary <- ddply(CallQual3, .(FY, USES, SRM), summarise, Total = length(MEM
 
 ```
 
-
-`r sum(FYSRMSummary[FYSRMSummary$SRM == "SRM",]$Total)` enquiries, or `r paste(round(100 * sum(FYSRMSummary[FYSRMSummary$SRM == "SRM",]$Total)/ sum(FYSRMSummary$Total), 1), "%", sep="")` of all enquiries, resulted in an SRM being created between Jun 2014 and July 2016. This is broken down in the plot below.
+\n 
+`r sum(FYSRMSummary[FYSRMSummary$SRM == "SRM",]$Total)` enquiries, or `r paste(round(100 * sum(FYSRMSummary[FYSRMSummary$SRM == "SRM",]$Total)/ sum(FYSRMSummary$Total), 1), "%", sep="")` of all enquiries, resulted in an SRM being created between Jun 2014 and July 2016. 
+\n 
+As a group `r round(100 * sum(FYSRMSummary[FYSRMSummary$SRM == "SRM" & FYSRMSummary$USES == "NONRES", 4])/ sum(FYSRMSummary[FYSRMSummary$USES == "NONRES", 4]), 1)`% of all non-residential customers' enquiries resulted in an SRM between Jun 2014 and July 2016. This is compared to a rate of `r round(100 * sum(FYSRMSummary[FYSRMSummary$SRM == "SRM" & FYSRMSummary$USES == "RES", 4])/ sum(FYSRMSummary[FYSRMSummary$USES == "RES", 4]), 1)`% of residential enquiries generating an SRM over the same time period.   
 
 ```{r Plot1, echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
 
@@ -454,12 +511,9 @@ p1Annual
 
 ```
 
-
-As a group `r round(100 * sum(FYSRMSummary[FYSRMSummary$SRM == "SRM" & FYSRMSummary$USES == "NONRES", 4])/ sum(FYSRMSummary[FYSRMSummary$USES == "NONRES", 4]), 1)`% of all non-residential customers' enquiries resulted in an SRM between Jun 2014 and July 2016. This is compared to a rate of `r round(100 * sum(FYSRMSummary[FYSRMSummary$SRM == "SRM" & FYSRMSummary$USES == "RES", 4])/ sum(FYSRMSummary[FYSRMSummary$USES == "RES", 4]), 1)`% of residential enquiries generateing an SRM over the same time period.   
-
 ```{r Annual SRM summary, include=FALSE}
 
-SRM_enquiry <- ddply(CallQual3 %>% filter(SRM == "SRM"), .(USES, ENQUIRY, FY), summarise, Total = length(MEMO_CONSUMER)) %>%
+SRM_enquiry <- ddply(CallQual3 %>% filter(SRM == "SRM"), .(USES, ENQUIRY), summarise, Total = length(MEMO_CONSUMER)) %>%
                       arrange(-Total) #%>%
                       #mutate(cumulative = cumsum(Total)/sum(Total))# %>%
                       # filter(cumulative < 0.93)
@@ -467,8 +521,9 @@ SRM_enquiry <- ddply(CallQual3 %>% filter(SRM == "SRM"), .(USES, ENQUIRY, FY), s
 SRM_enquiry_RES <- SRM_enquiry%>%
                    filter(USES == "RES") %>%
                    arrange(-Total) %>%
-                   mutate(cumulative = cumsum(Total)/sum(Total)) %>%
-                   filter(cumulative < 0.99)
+                   mutate(CumulativePercent = cumsum(Total)/sum(Total)) %>%
+                   filter(CumulativePercent < 0.99) %>%
+                   select(ENQUIRY, Total, CumulativePercent)
 
 SRM_enquiry[SRM_enquiry$USES == "RES" & !(SRM_enquiry$ENQUIRY %in% SRM_enquiry_RES$ENQUIRY), ]$ENQUIRY <- "OTHER"
 
@@ -480,8 +535,9 @@ TopThree_RES <- SRM_enquiry_RES %>%
 SRM_enquiry_NRES <- SRM_enquiry%>%
                    filter(USES == "NONRES") %>%
                    arrange(-Total) %>%
-                   mutate(cumulative = cumsum(Total)/sum(Total)) %>%
-                   filter(cumulative < 0.99)
+                   mutate(CumulativePercent = cumsum(Total)/sum(Total)) %>%
+                   filter(CumulativePercent < 0.99) %>%
+                   select(ENQUIRY, Total, CumulativePercent)
 
 SRM_enquiry[SRM_enquiry$USES == "NONRES" & !(SRM_enquiry$ENQUIRY %in% SRM_enquiry_NRES$ENQUIRY), ]$ENQUIRY <- "OTHER"
 
@@ -490,7 +546,7 @@ TopThree_NRES <- SRM_enquiry_NRES %>%
                 mutate(ENQUIRY = stri_trans_totitle(ENQUIRY)) %>% 
                 .[["ENQUIRY"]]
 
-SRM_enquiry <- aggregate(Total ~ USES + ENQUIRY + FY, SRM_enquiry, sum)
+SRM_enquiry <- aggregate(Total ~ USES + ENQUIRY, SRM_enquiry, sum)
 
 SRM_enquiry <- SRM_enquiry %>%
                arrange(Total)
@@ -498,9 +554,8 @@ SRM_enquiry <- SRM_enquiry %>%
 
 
 ```
-
-
-The graph below shows that the top three enquiry types ending up as SRMs were `r TopThree_NRES[1:2]` and `r TopThree_NRES[3]` for non-residential as well as `r TopThree_RES[1:2]` and `r TopThree_RES[3]` for residential customers. 
+\n 
+The graph and tables below show that the top three enquiry types ending up as SRMs were `r TopThree_NRES[1:2]` and `r TopThree_NRES[3]` for non-residential as well as `r TopThree_RES[1:2]` and `r TopThree_RES[3]` for residential customers.   
 
 ```{r Annual SRM plots, echo=FALSE, message=FALSE, warning=FALSE}
 
@@ -575,8 +630,17 @@ p1Annual
 #selectInput("p2", "", c("", ""))
 ```
 
+```{r xtable2, echo=FALSE, results="asis"}
+      
+print(xtable(SRM_enquiry_NRES, align = "cccr",latex.environments="center", format.args = list(digits = 2, format = c("d","d","s","f"))), type = "html", include.rownames=FALSE)
 
-####Non-residential SRM analsysis
+#print(xtable(m), add.to.row=list(list(1),"\\rowcolor[gray]{.8} "))
+#print(xtable(SRM_enquiry_RES), type = "html")
+```
+
+##Non-residential SRM analsysis
+
+####Internal SRMs
 
 The graph below shows over `r 2 + 2` percent of all customer enquiries between Jun 2014 and July 2016 were resolved at first point of contact. Approximately X percent of all customer enquiries were from residential type customers. 
 

@@ -2,28 +2,84 @@
 title: "EnquiriesAnalysisHTML"
 author: "Phil Farrell"
 date: "15 December 2016"
-output:
-  html_document: 
-    fig_caption: yes
-    fig_height: 8
-    fig_width: 10
-  pdf_document: default
+output: html_document
 ---
 
-```{r}
-eval_cell = TRUE
-```
-
-```{r child='Setup.Rmd', eval=eval_cell}
-```
-
-```{sql connection=conn}
-
-SELECT * FROM "CallQual3"
-
-```
-
 ####High level summary
+
+```{r setup script, message=FALSE, warning=FALSE, include=FALSE}
+
+#setwd("C:/Enquiries")
+
+eval_cell = FALSE
+
+PostgreSQLconnect <- function(dbname = "ABRdb", type = 1, user = NULL, host = NULL) {
+
+  if(!require(RPostgreSQL)) {
+    message("installing the 'RPostgreSQL' package")
+    install.packages("RPostgreSQL")
+  }
+
+  system("C:/bin/pgsql/run.bat")
+
+  Sys.sleep(3)
+
+  # Case 1: local database not requiring username/password
+  if(type == 1) {
+
+    con <- dbConnect(dbDriver("PostgreSQL"), dbname=dbname)
+  }
+
+  # Case 2: local database requiring username/password
+  else if(type == 2) {
+
+    con <- dbConnect(dbDriver("PostgreSQL"), user=user,
+                     password=scan(what=character(),nmax=1,quiet=TRUE), dbname=dbname)
+  }
+
+
+  # Case 3: remote database requiring username/password
+  else {
+    con <- dbConnect(dbDriver("PostgreSQL"), user=user,
+                     password=scan(what=character(),nmax=1,quiet=TRUE), dbname=dbname, host=host)
+  }
+
+  return(con)
+
+}
+
+conn <- PostgreSQLconnect()
+
+packages <- c("readr", "dplyr", "plyr", "tidyr", "ggplot2", "stringr", "lubridate", "sqldf", "randomNames", "data.table", "devtools", "scales", "knitr", "xtable", "stringi", "knitr")
+
+p <- installed.packages()
+
+#install.packages(pkgs = packages[!(packages %in% row.names(p))])
+
+library(devtools)
+
+ifelse(!("rCharts" %in% row.names(p)), install_github('ramnathv/rCharts'), TRUE)
+
+library(Enquiries)
+#library(ABR)
+library(rCharts)
+
+lapply(packages, require, character.only = TRUE)
+
+knitr::opts_chunk$set(include = FALSE)
+
+knitr::opts_knit$set(output.dir="C:/Enquiries/vignettes")
+
+```
+
+```{r child='Setup.Rmd', eval=eval_cell, message=FALSE, warning=FALSE, include=FALSE}
+```
+
+```{r, include=FALSE}
+
+CallQual3 <- dbReadTable(con=conn,
+                         name="CallQual3")
+```
 
 ```{r overall summary, message=FALSE, warning=FALSE, include=FALSE}
 
@@ -82,7 +138,7 @@ FYSRMSummary <- ddply(CallQual3, .(FY, USES, SRM), summarise, Total = length(MEM
 \n 
 As a group `r round(100 * sum(FYSRMSummary[FYSRMSummary$SRM == "SRM" & FYSRMSummary$USES == "NONRES", 4])/ sum(FYSRMSummary[FYSRMSummary$USES == "NONRES", 4]), 1)`% of all non-residential customers' enquiries resulted in an SRM between Jun 2014 and July 2016. This is compared to a rate of `r round(100 * sum(FYSRMSummary[FYSRMSummary$SRM == "SRM" & FYSRMSummary$USES == "RES", 4])/ sum(FYSRMSummary[FYSRMSummary$USES == "RES", 4]), 1)`% of residential enquiries generating an SRM over the same time period.   
 
-```{r Plot1, echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+```{r Plot1, echo=TRUE, message=FALSE, warning=FALSE}
 
 p1Annual <- ggplot(data = FYSRMSummary %>% arrange(-Total) %>% filter(SRM == "SRM"),
              aes(x = factor(USES),
@@ -144,7 +200,7 @@ SRM_enquiry <- SRM_enquiry %>%
 
 ```
 \n 
-The graph and tables below show that the top three enquiry types ending up as SRMs were `r TopThree_NRES[1:2]` and `r TopThree_NRES[3]` for non-residential as well as `r TopThree_RES[1:2]` and `r TopThree_RES[3]` for residential customers.   
+The graph and tables below show that the top three enquiry types (in order of importance) ending up as SRMs were `r TopThree_NRES[1:2]` and `r TopThree_NRES[3]` for non-residential as well as `r TopThree_RES[1:2]` and `r TopThree_RES[3]` for residential customers.   
 
 ```{r Annual SRM plots, echo=FALSE, message=FALSE, warning=FALSE}
 
@@ -228,6 +284,10 @@ print(xtable(SRM_enquiry_NRES, align = "cccr",latex.environments="center", forma
 ```
 
 ##Non-residential SRM analsysis
+
+####Non-res customer analysis
+
+
 
 ####Internal SRMs
 

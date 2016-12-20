@@ -382,6 +382,9 @@ CallQual3 <-   CallQual3 %>%
                left_join(Users, by = c("MEMO_CREATOR" = "USER_ID")) %>%
                left_join(Users, by = c("SR_CLOSER" = "USER_ID"))
 
+colnames(CallQual3)[colnames(CallQual3) == "ï..DEPARTMENT.x"] <- "BEGIN"
+colnames(CallQual3)[colnames(CallQual3) == "ï..DEPARTMENT.y"] <- "END"
+
 ```
 
 ```{r PostgreSQL connect, message=FALSE, warning=FALSE, include=FALSE}
@@ -708,7 +711,7 @@ p2
 
 `r 100 * round(sum(SRM_enquiry_NRES[SRM_enquiry_NRES$ENQUIRY == "INTERNAL SRM", 2])/sum(SRM_enquiry_NRES[,2]), 2)`% of all non-residential SRMs are raised as Internal SRMs. 
 
-```{r, include=FALSE}
+```{r internal SRM and action, include=FALSE}
 
 # CallQual3[CallQual3$SRM == TRUE,]$SRM <- "SRM"
 # CallQual3[CallQual3$SRM == FALSE,]$SRM <- "RESOLVED"
@@ -742,23 +745,32 @@ InternalSRM_Action <- InternalSRM_Action %>%
 
 These internal SRMs are raised against the tenant `r 100 * round(sum(InternalSRM_Action[InternalSRM_Action$ACC_TYPE == "TENANT", 3])/sum(InternalSRM_Action[,3]), 2)`% of the time followed by `r 100 * round(sum(InternalSRM_Action[InternalSRM_Action$ACC_TYPE == "OWNER", 3])/sum(InternalSRM_Action[,3]), 2)`% against the owner.   
 
-```{r, include=FALSE}
+```{r internal SRM contact type, include=FALSE}
 
-TopThree_ACTION <- InternalSRM_Action %>% 
-                  head(3) %>% 
-                  mutate(ACTION = stri_trans_totitle(ACTION)) %>% 
-                  .[["ACTION"]]
+InternalSRM_ConType <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "INTERNAL SRM"), .(SR_CALL_METHOD), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      arrange(-Total) %>%
+                      mutate(percent = 100 * round(Total/sum(Total),2))
+
+InternalSRM_ConType$SR_CALL_METHOD[InternalSRM_ConType$SR_CALL_METHOD == "I"] <- "Internal"
+InternalSRM_ConType$SR_CALL_METHOD[InternalSRM_ConType$SR_CALL_METHOD == "P"] <- "Phone"
+InternalSRM_ConType$SR_CALL_METHOD[InternalSRM_ConType$SR_CALL_METHOD == "E"] <- "Email"
+
+Internal <- InternalSRM_ConType %>% filter(SR_CALL_METHOD == "Internal") %>% .[["percent"]]
+
+TopThree_ACTION <- InternalSRM_ConType %>% filter(percent > 0, SR_CALL_METHOD != "Internal")
+
+TopThree_ACTION <- paste(TopThree_ACTION[["SR_CALL_METHOD"]], paste("(", TopThree_ACTION[["percent"]], "%", ")", sep = ""))
 
 ```
 
-The graph show that the top three SRM types (in order of importance) raised for the enquiry type "Internal SRM" were `r TopThree_ACTION[1:2]` and `r TopThree_ACTION[3]`. 
+The graph below shows `r Internal`% of Internal SRMs were generated internally with the majority of the remainder in response to `r TopThree_ACTION[1]` enquires. 
 
-```{r, echo=FALSE}
+```{r internal SRM contact type plot, echo=FALSE}
 
-p3 <- ggplot(data = InternalSRM_Action,
+p3 <- ggplot(data = InternalSRM_ConType,
              aes(x = factor(1),
                  y = Total,
-                 fill= ACTION,
+                 fill= SR_CALL_METHOD,
                  order = Total
                  )) 
 
@@ -769,6 +781,344 @@ p3 <- p3 + geom_bar(stat="identity")
 p3
 
 ```
+
+```{r internal SRM, echo=FALSE}
+
+sankeyPlot <- function(df, name){
+  sankeyPlot <- NULL
+  sankeyPlot <- rCharts$new()    #We need to tell R where the Sankey library is.  #I put it as a subdirectory to my current working directory (.)
+  sankeyPlot$setLib('http://timelyportfolio.github.io/rCharts_d3_sankey')    #We also need to point to an HTML template page
+  sankeyPlot$setTemplate(script =  "http://timelyportfolio.github.io/rCharts_d3_sankey/layouts/chart.html")
+  sankeyPlot$set(
+    data = df,
+    nodeWidth = 15,
+    nodePadding = 10,
+    layout = 32,
+    width = 750,
+    height = 500,
+    labelFormat = ".1%"
+  )
+  sankeyPlot$save(paste(name, '.html', sep = ""))}
+
+InternalSRM_ConType <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "INTERNAL SRM"), .(BEGIN, END), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      mutate(END = paste(END, "_end", sep = "")) %>%
+                      arrange(-Total) 
+
+
+Filter <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "INTERNAL SRM"), .(BEGIN, END), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      arrange(-Total) %>%
+                      mutate(cumulative = cumsum(Total)/sum(Total)) %>%
+                      filter(cumulative < 0.93) 
+
+InternalSRM_ConType[!(InternalSRM_ConType$BEGIN %in% Filter$BEGIN), ]$BEGIN <- "OTHER"
+
+
+EndUse_enquiry <- aggregate(Total ~ BEGIN + END, InternalSRM_ConType, sum) %>%
+                  mutate(Total = Total/sum(Total))
+
+colnames(EndUse_enquiry) <- c("source", "target", "value")
+
+sankeyPlot(EndUse_enquiry, name = "InternalSRM")
+
+htmltools::includeHTML("C:/Enquiries/InternalSRM.html")
+
+```
+
+```{r Top three actions, include=FALSE}
+# 
+# TopThree_ACTION <- InternalSRM_Action_filter %>% 
+#                   head(3) %>% 
+#                   mutate(ACTION = stri_trans_totitle(ACTION)) %>% 
+#                   .[["ACTION"]]
+
+TopThree_ACTION <- InternalSRM_Action_filter %>%  
+                   mutate(percent = 100 * round(Total/sum(Total), 2)) %>%
+                   head(3)
+
+TopThree_ACTION <- paste(TopThree_ACTION[["ACTION"]], paste("(", TopThree_ACTION[["percent"]], "%", ")", sep = ""))
+
+```
+
+The graph show that the top three SRM types (in order of importance) raised for the enquiry type "Internal SRM" were `r TopThree_ACTION[1:2]` and `r TopThree_ACTION[3]`. 
+
+```{r Action plot, echo=FALSE}
+
+p4 <- ggplot(data = InternalSRM_Action,
+             aes(x = factor(1),
+                 y = Total,
+                 fill= ACTION,
+                 order = Total
+                 )) 
+
+p4 <- p4 + geom_bar(stat="identity")
+
+#p1Annual <- p1Annual + facet_grid(facets=~FY)
+
+p4
+
+```
+
+####Metering
+
+`r 100 * round(sum(SRM_enquiry_NRES[SRM_enquiry_NRES$ENQUIRY == "METERING", 2])/sum(SRM_enquiry_NRES[,2]), 2)`% of all non-residential SRMs are raised as Metering SRMs. 
+
+```{r Metering and action, include=FALSE}
+
+# CallQual3[CallQual3$SRM == TRUE,]$SRM <- "SRM"
+# CallQual3[CallQual3$SRM == FALSE,]$SRM <- "RESOLVED"
+
+MeteringSRM_Action <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "METERING"), .(ACC_TYPE, ACTION), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      arrange(-Total) #%>%
+                      #mutate(cumulative = cumsum(Total)/sum(Total))# %>%
+                      # filter(cumulative < 0.93)
+
+MeteringSRM_Action_filter <- aggregate(Total ~ ACTION, MeteringSRM_Action, sum)
+
+MeteringSRM_Action_filter <- MeteringSRM_Action_filter %>%
+                   arrange(-Total) %>%  
+                   # group_by(ENQUIRY) %>%
+                   # summarise(Total = sum(Total)) %>%
+                   # ungroup %>%
+                   mutate(CumulativePercent = cumsum(Total)/sum(Total)) %>%
+                   filter(CumulativePercent < 0.99) %>%
+                   select(ACTION, Total, CumulativePercent)
+
+MeteringSRM_Action[!(MeteringSRM_Action$ACTION %in% MeteringSRM_Action_filter$ACTION), ]$ACTION <- "OTHER"
+
+MeteringSRM_Action <- aggregate(Total ~ ACC_TYPE + ACTION, MeteringSRM_Action, sum)
+
+MeteringSRM_Action <- MeteringSRM_Action %>%
+                      arrange(-Total)
+
+# SRM_NRES_type$ENQUIRY <- factor(SRM_NRES_type$ENQUIRY, levels = unique(SRM_NRES_type$ENQUIRY))
+
+```
+
+These Metering SRMs are raised against the owner `r 100 * round(sum(MeteringSRM_Action[MeteringSRM_Action$ACC_TYPE == "OWNER", 3])/sum(MeteringSRM_Action[,3]), 2)`% of the time followed by `r 100 * round(sum(MeteringSRM_Action[MeteringSRM_Action$ACC_TYPE == "TENANT", 3])/sum(MeteringSRM_Action[,3]), 2)`% against the tenant.   
+
+```{r METERING SRM contact type, include=FALSE}
+
+InternalSRM_ConType <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "METERING"), .(SR_CALL_METHOD), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      arrange(-Total) %>%
+                      mutate(percent = 100 * round(Total/sum(Total),2))
+
+InternalSRM_ConType$SR_CALL_METHOD[InternalSRM_ConType$SR_CALL_METHOD == "I"] <- "Internal"
+InternalSRM_ConType$SR_CALL_METHOD[InternalSRM_ConType$SR_CALL_METHOD == "P"] <- "Phone"
+InternalSRM_ConType$SR_CALL_METHOD[InternalSRM_ConType$SR_CALL_METHOD == "E"] <- "Email"
+
+Internal <- InternalSRM_ConType %>% filter(SR_CALL_METHOD == "Internal") %>% .[["percent"]]
+
+TopThree_ACTION <- InternalSRM_ConType %>% filter(percent > 0, SR_CALL_METHOD != "Internal")
+
+TopThree_ACTION <- paste(TopThree_ACTION[["SR_CALL_METHOD"]], paste("(", TopThree_ACTION[["percent"]], "%", ")", sep = ""))
+
+```
+
+The graph below shows `r Internal`% of Internal SRMs were generated internally with the majority of the remainder in response to `r TopThree_ACTION[1]` enquires. 
+
+```{r METERING contact type plot, echo=FALSE}
+
+p5 <- ggplot(data = InternalSRM_ConType,
+             aes(x = factor(1),
+                 y = Total,
+                 fill= SR_CALL_METHOD,
+                 order = Total
+                 )) 
+
+p5 <- p5 + geom_bar(stat="identity")
+
+#p1Annual <- p1Annual + facet_grid(facets=~FY)
+
+p5
+
+```
+
+```{r Metering SRM, echo=FALSE}
+
+InternalSRM_ConType <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "METERING"), .(BEGIN, END), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      mutate(END = paste(END, "_end")) %>%
+                      arrange(-Total) 
+
+
+Filter <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "METERING"), .(BEGIN, END), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      arrange(-Total) %>%
+                      mutate(cumulative = cumsum(Total)/sum(Total)) %>%
+                      filter(cumulative < 0.93) 
+
+InternalSRM_ConType[!(InternalSRM_ConType$BEGIN %in% Filter$BEGIN), ]$BEGIN <- "OTHER"
+
+
+EndUse_enquiry <- aggregate(Total ~ BEGIN + END, InternalSRM_ConType, sum) %>%
+                  mutate(Total = Total/sum(Total))
+
+colnames(EndUse_enquiry) <- c("source", "target", "value")
+
+sankeyPlot(EndUse_enquiry, name = "MeteringSRM")
+
+htmltools::includeHTML("C:/Enquiries/MeteringSRM.html")
+
+```
+
+```{r Top three actions Metering, include=FALSE}
+
+TopThree_ACTION <- MeteringSRM_Action_filter %>%  
+                   mutate(percent = 100 * round(Total/sum(Total), 2)) %>%
+                   head(3)
+
+TopThree_ACTION <- paste(TopThree_ACTION[["ACTION"]], paste("(", TopThree_ACTION[["percent"]], "%", ")", sep = ""))
+
+```
+
+The graph show that the top three SRM types (in order of importance) raised for the enquiry type "Metering" were `r TopThree_ACTION[1:2]` and `r TopThree_ACTION[3]`. 
+
+```{r Action plot Metering, echo=FALSE}
+
+p4 <- ggplot(data = MeteringSRM_Action,
+             aes(x = factor(1),
+                 y = Total,
+                 fill= ACTION,
+                 order = Total
+                 )) 
+
+p4 <- p4 + geom_bar(stat="identity")
+
+#p1Annual <- p1Annual + facet_grid(facets=~FY)
+
+p4
+
+```
+
+
+####Trade Waste
+
+`r 100 * round(sum(SRM_enquiry_NRES[SRM_enquiry_NRES$ENQUIRY == "TRADE WASTE", 2])/sum(SRM_enquiry_NRES[,2]), 2)`% of all non-residential SRMs are raised as Trade waste SRMs. 
+
+```{r Trade Waste and action, include=FALSE}
+
+# CallQual3[CallQual3$SRM == TRUE,]$SRM <- "SRM"
+# CallQual3[CallQual3$SRM == FALSE,]$SRM <- "RESOLVED"
+
+TradeWasteSRM_Action <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "TRADE WASTE"), .(ACC_TYPE, ACTION), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      arrange(-Total) #%>%
+                      #mutate(cumulative = cumsum(Total)/sum(Total))# %>%
+                      # filter(cumulative < 0.93)
+
+TradeWasteSRM_Action_filter <- aggregate(Total ~ ACTION, TradeWasteSRM_Action, sum)
+
+TradeWasteSRM_Action_filter <- TradeWasteSRM_Action_filter %>%
+                   arrange(-Total) %>%  
+                   # group_by(ENQUIRY) %>%
+                   # summarise(Total = sum(Total)) %>%
+                   # ungroup %>%
+                   mutate(CumulativePercent = cumsum(Total)/sum(Total)) %>%
+                   filter(CumulativePercent < 0.99) %>%
+                   select(ACTION, Total, CumulativePercent)
+
+TradeWasteSRM_Action[!(TradeWasteSRM_Action$ACTION %in% TradeWasteSRM_Action_filter$ACTION), ]$ACTION <- "OTHER"
+
+TradeWasteSRM_Action <- aggregate(Total ~ ACC_TYPE + ACTION, TradeWasteSRM_Action, sum)
+
+TradeWasteSRM_Action <- TradeWasteSRM_Action %>%
+                        arrange(-Total)
+
+# SRM_NRES_type$ENQUIRY <- factor(SRM_NRES_type$ENQUIRY, levels = unique(SRM_NRES_type$ENQUIRY))
+
+```
+
+These internal SRMs are raised against the trade waste account `r 100 * round(sum(TradeWasteSRM_Action[TradeWasteSRM_Action$ACC_TYPE == "TRADE_WASTE", 3])/sum(TradeWasteSRM_Action[,3]), 2)`% of the time followed by `r 100 * round(sum(TradeWasteSRM_Action[TradeWasteSRM_Action$ACC_TYPE == "TENANT", 3])/sum(TradeWasteSRM_Action[,3]), 2)`% against the tenant.   
+
+```{r TRADEWASTE SRM contact type, include=FALSE}
+
+InternalSRM_ConType <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "TRADE WASTE"), .(SR_CALL_METHOD), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      arrange(-Total) %>%
+                      mutate(percent = 100 * round(Total/sum(Total),2))
+
+InternalSRM_ConType$SR_CALL_METHOD[InternalSRM_ConType$SR_CALL_METHOD == "I"] <- "Internal"
+InternalSRM_ConType$SR_CALL_METHOD[InternalSRM_ConType$SR_CALL_METHOD == "P"] <- "Phone"
+InternalSRM_ConType$SR_CALL_METHOD[InternalSRM_ConType$SR_CALL_METHOD == "E"] <- "Email"
+
+Internal <- InternalSRM_ConType %>% filter(SR_CALL_METHOD == "Internal") %>% .[["percent"]]
+
+TopThree_ACTION <- InternalSRM_ConType %>% filter(percent > 0, SR_CALL_METHOD != "Internal")
+
+TopThree_ACTION <- paste(TopThree_ACTION[["SR_CALL_METHOD"]], paste("(", TopThree_ACTION[["percent"]], "%", ")", sep = ""))
+
+```
+
+The graph below shows `r Internal`% of Internal SRMs were generated internally with the majority of the remainder in response to `r TopThree_ACTION[1]` enquires. 
+
+```{r TRADEWASTE contact type plot, echo=FALSE}
+
+p6 <- ggplot(data = InternalSRM_ConType,
+             aes(x = factor(1),
+                 y = Total,
+                 fill= SR_CALL_METHOD,
+                 order = Total
+                 )) 
+
+p6 <- p6 + geom_bar(stat="identity")
+
+#p1Annual <- p1Annual + facet_grid(facets=~FY)
+
+p6
+
+```
+
+```{r TRADEWASTE SRM, echo=FALSE}
+
+InternalSRM_ConType <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "TRADE WASTE"), .(BEGIN, END), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      mutate(END = paste(END, "_end")) %>%
+                      arrange(-Total) 
+
+
+Filter <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "TRADE WASTE"), .(BEGIN, END), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      arrange(-Total) %>%
+                      mutate(cumulative = cumsum(Total)/sum(Total)) %>%
+                      filter(cumulative < 0.93) 
+
+InternalSRM_ConType[!(InternalSRM_ConType$BEGIN %in% Filter$BEGIN), ]$BEGIN <- "OTHER"
+
+
+EndUse_enquiry <- aggregate(Total ~ BEGIN + END, InternalSRM_ConType, sum) %>%
+                  mutate(Total = Total/sum(Total))
+
+colnames(EndUse_enquiry) <- c("source", "target", "value")
+
+sankeyPlot(EndUse_enquiry, name = "TradewasteSRM")
+
+htmltools::includeHTML("C:/Enquiries/TradewasteSRM.html")
+
+```
+
+```{r Top three actions Trade Waste, echo=FALSE}
+
+TopThree_ACTION <- TradeWasteSRM_Action_filter %>%  
+                   mutate(percent = 100 * round(Total/sum(Total), 2)) %>%
+                   head(3)
+
+TopThree_ACTION <- paste(TopThree_ACTION[["ACTION"]], paste("(", TopThree_ACTION[["percent"]], "%", ")", sep = ""))
+
+```
+
+The graph show that the top three SRM types (in order of importance) raised for the enquiry type "Trade waste" were `r TopThree_ACTION[1:2]` and `r TopThree_ACTION[3]`. 
+
+```{r Action plot Trade Waste, echo=FALSE}
+
+p5 <- ggplot(data = TradeWasteSRM_Action,
+             aes(x = factor(1),
+                 y = Total,
+                 fill= ACTION,
+                 order = Total
+                 )) 
+
+p5 <- p5 + geom_bar(stat="identity")
+
+#p1Annual <- p1Annual + facet_grid(facets=~FY)
+
+p5
+
+```
+
 
 The graph below shows over `r 2 + 2` percent of all customer enquiries between Jun 2014 and July 2016 were resolved at first point of contact. Approximately X percent of all customer enquiries were from residential type customers. 
 
@@ -949,3 +1299,4 @@ sankeyPlot(Users2, "Enquiry_users2")
 htmltools::includeHTML("C:/Enquiries/data/Enquiry_users2.html")
 
 ```
+

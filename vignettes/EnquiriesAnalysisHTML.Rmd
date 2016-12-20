@@ -5,11 +5,16 @@ date: "15 December 2016"
 output: html_document
 ---
 
-####Setup
+<<<<<<< HEAD:vignettes/EnquiriesAnalysisHTML2.Rmd
+####High level summary
 
 ```{r setup script, message=FALSE, warning=FALSE, include=FALSE}
 
 #setwd("C:/Enquiries")
+
+eval_cell = FALSE
+=======
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
 packages <- c("readr", "dplyr", "plyr", "tidyr", "ggplot2", "stringr", "lubridate", "sqldf", "randomNames", "data.table", "devtools", "scales", "knitr", "xtable", "stringi")
@@ -28,18 +33,16 @@ library(rCharts)
 
 lapply(packages, require, character.only = TRUE)
 
-eval_cell = FALSE
-
 ```
 
-```{r load, eval= eval_cell, message=FALSE, warning=FALSE, include=FALSE}
+```{r load, message=FALSE, warning=FALSE, include=FALSE}
 
 CallQual <- read_delim("N:/ABR/GENTRACK DATA/data AGAIN  for phil 22 nov.txt", 
                     delim = "|", quote = "") #quote = "" is important to avoid parsing failures
 
 ```
 
-```{r organise memo information, eval= eval_cell, message=FALSE, warning=FALSE, include=FALSE}
+```{r organise memo information, message=FALSE, warning=FALSE, include=FALSE}
 
 filter <- !(as.numeric(row.names(CallQual)) %in% problems(CallQual)$row)
 
@@ -318,7 +321,7 @@ CallQual3[ , cols] <- apply(CallQual3[ , cols], 2, toupper)
 
 ```
 
-```{r Date time, message=FALSE, eval= eval_cell, warning=FALSE, include=FALSE}
+```{r Date time, message=FALSE, warning=FALSE, include=FALSE}
 
 CallQual3 <- CallQual3 %>%
                     mutate(SRM = ifelse(!is.na(SR_SERV_CODE), TRUE, FALSE),
@@ -329,7 +332,7 @@ CallQual3 <- CallQual3 %>%
 
 ```
 
-```{r Key Accounts, eval= eval_cell, message=FALSE, warning=FALSE, include=FALSE}
+```{r Key Accounts, message=FALSE, warning=FALSE, include=FALSE}
 PropertyLayer <- read.csv("file:///N:/KarlBlackhall/Gentrack AL/PROPERTY_LAYER_1516FY (Q1-Q4).csv",
                           stringsAsFactors = FALSE) %>%
                  mutate(ACC_NAME = gsub("[[:space:]]|[^[:alnum:]]", "", ACCOUNT_NAME))
@@ -358,7 +361,7 @@ CallQual3[!(as.numeric(substr(CallQual3$MEMO_CONSUMER, 3, 9)) %in% KeyAccountsID
 
 ```
 
-```{r Gentrack Acc type, eval= eval_cell, message=FALSE, warning=FALSE, include=FALSE}
+```{r Gentrack Acc type, message=FALSE, warning=FALSE, include=FALSE}
 
 CallQual3$ACC_TYPE <- "TENANT"
 
@@ -372,19 +375,8 @@ CallQual3[substr(CallQual3$MEMO_CONSUMER, 1, 2) == 99,]$ACC_TYPE <- "99"
 
 ```
 
-```{r Gentrack Users, eval= eval_cell, include=FALSE}
-
-Users <- read.csv("file:///N:/ABR/Output_2_RootCauseSRMandRepeats/SRSSreports/GentrackUsers.csv",
-                  stringsAsFactors = FALSE) %>%
-         select(USER_ID, FULL_NAME, ï..DEPARTMENT, Access)
-
-CallQual3 <-   CallQual3 %>%
-               left_join(Users, by = c("MEMO_CREATOR" = "USER_ID")) %>%
-               left_join(Users, by = c("SR_CLOSER" = "USER_ID"))
-
-```
-
 ```{r PostgreSQL connect, message=FALSE, warning=FALSE, include=FALSE}
+>>>>>>> parent of 77357ca... Setup.Rmd and EnquiriesAnalysisHTML.Rmd seperation draft One:vignettes/EnquiriesAnalysisHTML.Rmd
 
 PostgreSQLconnect <- function(dbname = "ABRdb", type = 1, user = NULL, host = NULL) {
 
@@ -420,21 +412,40 @@ PostgreSQLconnect <- function(dbname = "ABRdb", type = 1, user = NULL, host = NU
   return(con)
 
 }
+<<<<<<< HEAD:vignettes/EnquiriesAnalysisHTML2.Rmd
+=======
 
 conn <- PostgreSQLconnect()
 
 ```
+>>>>>>> parent of 77357ca... Setup.Rmd and EnquiriesAnalysisHTML.Rmd seperation draft One:vignettes/EnquiriesAnalysisHTML.Rmd
 
-```{r Write CAllQual3 to PGSQL, eval= eval_cell, message=FALSE, warning=FALSE, include=FALSE}
+conn <- PostgreSQLconnect()
 
-dbRemoveTable(conn, "CallQual3")
+<<<<<<< HEAD:vignettes/EnquiriesAnalysisHTML2.Rmd
+packages <- c("readr", "dplyr", "plyr", "tidyr", "ggplot2", "stringr", "lubridate", "sqldf", "randomNames", "data.table", "devtools", "scales", "knitr", "xtable", "stringi", "knitr")
 
-dbWriteTable(con=conn,
-             name="CallQual3",
-             value=CallQual3,
-             row.names=FALSE,
-             append=FALSE)
+p <- installed.packages()
 
+#install.packages(pkgs = packages[!(packages %in% row.names(p))])
+
+library(devtools)
+
+ifelse(!("rCharts" %in% row.names(p)), install_github('ramnathv/rCharts'), TRUE)
+
+library(Enquiries)
+#library(ABR)
+library(rCharts)
+
+lapply(packages, require, character.only = TRUE)
+
+knitr::opts_chunk$set(include = FALSE)
+
+knitr::opts_knit$set(output.dir="C:/Enquiries/vignettes")
+
+```
+
+```{r child='Setup.Rmd', eval=eval_cell, message=FALSE, warning=FALSE, include=FALSE}
 ```
 
 ```{r, include=FALSE}
@@ -442,8 +453,29 @@ dbWriteTable(con=conn,
 CallQual3 <- dbReadTable(con=conn,
                          name="CallQual3")
 ```
+=======
+DROP TABLE IF EXISTS callqual3;
+
+
+
+<!-- CallQual3 <- dbReadTable(con=conn, -->
+<!--                          name="CallQual3") -->
+
+
+```
+
+```{r CallQual3 to postgreSQL, message=FALSE, warning=FALSE, include=FALSE}
+
+dbWriteTable(con=conn,
+              name="CallQual3",
+              value=CallQual3,
+              row.names=FALSE,
+              append=FALSE)
+```
+
 
 ####High level summary
+>>>>>>> parent of 77357ca... Setup.Rmd and EnquiriesAnalysisHTML.Rmd seperation draft One:vignettes/EnquiriesAnalysisHTML.Rmd
 
 ```{r overall summary, message=FALSE, warning=FALSE, include=FALSE}
 
@@ -502,7 +534,7 @@ FYSRMSummary <- ddply(CallQual3, .(FY, USES, SRM), summarise, Total = length(MEM
 \n 
 As a group `r round(100 * sum(FYSRMSummary[FYSRMSummary$SRM == "SRM" & FYSRMSummary$USES == "NONRES", 4])/ sum(FYSRMSummary[FYSRMSummary$USES == "NONRES", 4]), 1)`% of all non-residential customers' enquiries resulted in an SRM between Jun 2014 and July 2016. This is compared to a rate of `r round(100 * sum(FYSRMSummary[FYSRMSummary$SRM == "SRM" & FYSRMSummary$USES == "RES", 4])/ sum(FYSRMSummary[FYSRMSummary$USES == "RES", 4]), 1)`% of residential enquiries generating an SRM over the same time period.   
 
-```{r Plot1, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+```{r Plot1, echo=TRUE, message=FALSE, warning=FALSE}
 
 p1Annual <- ggplot(data = FYSRMSummary %>% arrange(-Total) %>% filter(SRM == "SRM"),
              aes(x = factor(USES),
@@ -527,7 +559,7 @@ SRM_enquiry <- ddply(CallQual3 %>% filter(SRM == "SRM"), .(USES, ENQUIRY), summa
                       #mutate(cumulative = cumsum(Total)/sum(Total))# %>%
                       # filter(cumulative < 0.93)
 
-SRM_enquiry_RES <- SRM_enquiry %>%
+SRM_enquiry_RES <- SRM_enquiry%>%
                    filter(USES == "RES") %>%
                    arrange(-Total) %>%
                    mutate(CumulativePercent = cumsum(Total)/sum(Total)) %>%
@@ -647,128 +679,13 @@ print(xtable(SRM_enquiry_NRES, align = "cccr",latex.environments="center", forma
 #print(xtable(SRM_enquiry_RES), type = "html")
 ```
 
-```{r xtable3, echo=FALSE, results="asis"}
-
-print(xtable(SRM_enquiry_RES, align = "cccr",latex.environments="center", format.args = list(digits = 2, format = c("d","d","s","f"))), type = "html", include.rownames=FALSE)
-
-```
-
-
 ##Non-residential SRM analsysis
 
 ####Non-res customer analysis
 
-```{r, include=FALSE}
 
-SRM_NRES_type <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES"), .(ACC_TYPE, ENQUIRY), summarise, Total = length(MEMO_CONSUMER)) %>%
-                      arrange(-Total) #%>%
-                      #mutate(cumulative = cumsum(Total)/sum(Total))# %>%
-                      # filter(cumulative < 0.93)
-
-SRM_NRES_type_filter <- aggregate(Total ~ ENQUIRY, SRM_NRES_type, sum)
-
-SRM_NRES_type_filter <- SRM_NRES_type_filter %>%
-                   arrange(-Total) %>%  
-                   # group_by(ENQUIRY) %>%
-                   # summarise(Total = sum(Total)) %>%
-                   # ungroup %>%
-                   mutate(CumulativePercent = cumsum(Total)/sum(Total)) %>%
-                   filter(CumulativePercent < 0.99) %>%
-                   select(ENQUIRY, Total, CumulativePercent)
-
-SRM_NRES_type[!(SRM_NRES_type$ENQUIRY %in% SRM_NRES_type_filter$ENQUIRY), ]$ENQUIRY <- "OTHER"
-
-SRM_NRES_type <- aggregate(Total ~ ACC_TYPE + ENQUIRY, SRM_NRES_type, sum)
-
-SRM_NRES_type <- SRM_NRES_type %>%
-                 arrange(Total)
-
-SRM_NRES_type$ENQUIRY <- factor(SRM_NRES_type$ENQUIRY, levels = unique(SRM_NRES_type$ENQUIRY))
-
-
-```
-
-```{r SRM by type, echo=FALSE}
-
-p2 <- ggplot(data = SRM_NRES_type,
-             aes(x = ACC_TYPE,
-                 y = Total,
-                 fill= ENQUIRY,
-                 order = Total
-                 )) 
-
-p2 <- p2 + geom_bar(stat="identity")
-
-#p1Annual <- p1Annual + facet_grid(facets=~FY)
-
-p2 
-```
 
 ####Internal SRMs
-
-`r 100 * round(sum(SRM_enquiry_NRES[SRM_enquiry_NRES$ENQUIRY == "INTERNAL SRM", 2])/sum(SRM_enquiry_NRES[,2]), 2)`% of all non-residential SRMs are raised as Internal SRMs. 
-
-```{r, include=FALSE}
-
-# CallQual3[CallQual3$SRM == TRUE,]$SRM <- "SRM"
-# CallQual3[CallQual3$SRM == FALSE,]$SRM <- "RESOLVED"
-
-InternalSRM_Action <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "INTERNAL SRM"), .(ACC_TYPE, ACTION), summarise, Total = length(MEMO_CONSUMER)) %>%
-                      arrange(-Total) #%>%
-                      #mutate(cumulative = cumsum(Total)/sum(Total))# %>%
-                      # filter(cumulative < 0.93)
-
-InternalSRM_Action_filter <- aggregate(Total ~ ACTION, InternalSRM_Action, sum)
-
-InternalSRM_Action_filter <- InternalSRM_Action_filter %>%
-                   arrange(-Total) %>%  
-                   # group_by(ENQUIRY) %>%
-                   # summarise(Total = sum(Total)) %>%
-                   # ungroup %>%
-                   mutate(CumulativePercent = cumsum(Total)/sum(Total)) %>%
-                   filter(CumulativePercent < 0.99) %>%
-                   select(ACTION, Total, CumulativePercent)
-
-InternalSRM_Action[!(InternalSRM_Action$ACTION %in% InternalSRM_Action_filter$ACTION), ]$ACTION <- "OTHER"
-
-InternalSRM_Action <- aggregate(Total ~ ACC_TYPE + ACTION, InternalSRM_Action, sum)
-
-InternalSRM_Action <- InternalSRM_Action %>%
-                      arrange(-Total)
-
-# SRM_NRES_type$ENQUIRY <- factor(SRM_NRES_type$ENQUIRY, levels = unique(SRM_NRES_type$ENQUIRY))
-
-```
-
-These internal SRMs are raised against the tenant `r 100 * round(sum(InternalSRM_Action[InternalSRM_Action$ACC_TYPE == "TENANT", 3])/sum(InternalSRM_Action[,3]), 2)`% of the time followed by `r 100 * round(sum(InternalSRM_Action[InternalSRM_Action$ACC_TYPE == "OWNER", 3])/sum(InternalSRM_Action[,3]), 2)`% against the owner.   
-
-```{r, include=FALSE}
-
-TopThree_ACTION <- InternalSRM_Action %>% 
-                  head(3) %>% 
-                  mutate(ACTION = stri_trans_totitle(ACTION)) %>% 
-                  .[["ACTION"]]
-
-```
-
-The graph show that the top three SRM types (in order of importance) raised for the enquiry type "Internal SRM" were `r TopThree_ACTION[1:2]` and `r TopThree_ACTION[3]`. 
-
-```{r, echo=FALSE}
-
-p3 <- ggplot(data = InternalSRM_Action,
-             aes(x = factor(1),
-                 y = Total,
-                 fill= ACTION,
-                 order = Total
-                 )) 
-
-p3 <- p3 + geom_bar(stat="identity")
-
-#p1Annual <- p1Annual + facet_grid(facets=~FY)
-
-p3
-
-```
 
 The graph below shows over `r 2 + 2` percent of all customer enquiries between Jun 2014 and July 2016 were resolved at first point of contact. Approximately X percent of all customer enquiries were from residential type customers. 
 
@@ -789,18 +706,6 @@ sankeyPlot <- function(df, name){
     labelFormat = ".1%"
   )
   sankeyPlot$save(paste(name, '.html', sep = ""))}
-
-EnquiryCountAnnual <- ddply(CallQual3, .(ENQUIRY, USES, SRM), summarise, Total = length(MEMO_CONSUMER)) %>%
-                      arrange(-Total) %>%
-                      select(USES,
-                             SRM,
-                             ENQUIRY,
-                             Total)
-
-Filter <- ddply(CallQual3 %>% filter(SRM == "SRM"), .(ENQUIRY), summarise, Total = length(MEMO_CONSUMER)/x) %>%
-                      arrange(-Total) %>%
-                      mutate(cumulative = cumsum(Total)/sum(Total)) %>%
-                      filter(cumulative < 0.93)
 
 x <- length(unique(CallQual3$MEMO_CONSUMER))
 
@@ -834,6 +739,7 @@ htmltools::includeHTML("C:/Enquiries/data/Enduse_SRM.html")
 ```
 
 Over 40,000 enquiries between Jun 2014 and July 2016 
+
 
 
 ```{r Non-res SRM flow, echo=FALSE, message=FALSE, warning=FALSE}

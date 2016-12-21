@@ -7,7 +7,7 @@
 ParsingFailFix(table)
 }
 \arguments{
-\item{table}{}
+\item{table}{input data frame}
 }
 \description{
 This function fixes any parsing fails

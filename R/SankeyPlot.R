@@ -1,7 +1,8 @@
 #' Create a sankey plot
 #'
 #' This function creates a sankey plot with an input dataframe
-#' @param df
+#' @param df input dataframe to contruct the Sankey plot
+#' @param name is the name of the saved HTML sankey to file
 #' @keywords Sankey plot, sankey diagram
 #' @export
 #' @examples

@@ -1,7 +1,7 @@
 #' A function to address parsing failures from reading in raw enquiries data
 #'
 #' This function fixes any parsing fails
-#' @param table
+#' @param table input data frame
 #' @keywords Parsing Fail, table
 #' @export
 #' @examples

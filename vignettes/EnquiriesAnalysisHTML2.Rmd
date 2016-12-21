@@ -5,6 +5,13 @@ date: "15 December 2016"
 output: html_document
 ---
 
+```{r, include=FALSE}
+
+eval_cell = FALSE
+
+```
+
+
 ####Setup
 
 ```{r setup script, message=FALSE, warning=FALSE, include=FALSE}
@@ -27,8 +34,6 @@ library(Enquiries)
 library(rCharts)
 
 lapply(packages, require, character.only = TRUE)
-
-eval_cell = FALSE
 
 ```
 
@@ -372,7 +377,22 @@ CallQual3[substr(CallQual3$MEMO_CONSUMER, 1, 2) == 99,]$ACC_TYPE <- "99"
 
 ```
 
-```{r Gentrack Users, eval= eval_cell, include=FALSE}
+```{r Gentrack Users, eval= FALSE, include=FALSE}
+
+getData <- function() {
+
+  cmd <- readLines("N:/ABR/Output_2_RootCauseSRMandRepeats/SRSSreports/GetData.txt")
+
+  # today <- format(Sys.Date(), "%d%m%Y")
+  #
+  # cmd <- gsub("(.*)(\\'\\D*)(\\d+)(.*\\')(.*)", paste0("\\1", "\\2", today, "\\4", ")"), cmd)
+
+  shell(cmd, shell="C:/Windows/system32/cmd.exe")
+
+}
+
+getData()
+
 
 Users <- read.csv("file:///N:/ABR/Output_2_RootCauseSRMandRepeats/SRSSreports/GentrackUsers.csv",
                   stringsAsFactors = FALSE) %>%
@@ -384,6 +404,22 @@ CallQual3 <-   CallQual3 %>%
 
 colnames(CallQual3)[colnames(CallQual3) == "ï..DEPARTMENT.x"] <- "BEGIN"
 colnames(CallQual3)[colnames(CallQual3) == "ï..DEPARTMENT.y"] <- "END"
+
+```
+
+```{r SRM, eval= eval_cell, include=FALSE}
+
+CallQual3$SRM <- ifelse(!is.na(CallQual3$SR_SERV_CODE), "SRM", "RESOLVED")   
+
+```
+
+```{r Split into Customer and Memo tables, eval= eval_cell, include=FALSE}
+
+Customer <- CallQual3 %>%
+            select(1:6, USES, KEY_ACCOUNT, CUS_BIRTHDATE)
+
+CallQual4 <- CallQual3 %>%
+             select(1, USES, ACC_TYPE, MEMO_ID, MEMO_DATETIME, MEMO_CREATOR, FULL_NAME.x, BEGIN, Access.x, MEMO_TYPE, ENQUIRY, ACTION, RESULT, MEMO, SRM, SRM_ID, SR_DATETIME, SR_CREATOR, SR_CLOSER, FULL_NAME.y, END, Access.y, 27:34)
 
 ```
 
@@ -430,27 +466,36 @@ conn <- PostgreSQLconnect()
 
 ```{r Write CAllQual3 to PGSQL, eval= eval_cell, message=FALSE, warning=FALSE, include=FALSE}
 
-dbRemoveTable(conn, "CallQual3")
+dbRemoveTable(conn, "CallQual_Memo")
 
 dbWriteTable(con=conn,
-             name="CallQual3",
-             value=CallQual3,
+             name="CallQual_Memo",
+             value=CallQual4,
+             row.names=FALSE,
+             append=FALSE)
+
+dbRemoveTable(conn, "CallQual_Customer")
+
+dbWriteTable(con=conn,
+             name="CallQual_Customer",
+             value=Customer,
              row.names=FALSE,
              append=FALSE)
 
 ```
 
-```{r, include=FALSE}
+```{r Read in CallQual3, include=FALSE}
 
 CallQual3 <- dbReadTable(con=conn,
-                         name="CallQual3")
+                         name="CallQual_Memo")
+
+CallQual_Customer <- dbReadTable(con=conn,
+                         name="CallQual_Customer")
 ```
 
 ####High level summary
 
 ```{r overall summary, message=FALSE, warning=FALSE, include=FALSE}
-
-CallQual3$SRM <- ifelse(!is.na(CallQual3$SR_SERV_CODE), "SRM", "RESOLVED")   
 
 x <- length(unique(CallQual3$MEMO_CONSUMER))
 
@@ -784,43 +829,15 @@ p3
 
 ```{r internal SRM, echo=FALSE}
 
-sankeyPlot <- function(df, name){
-  sankeyPlot <- NULL
-  sankeyPlot <- rCharts$new()    #We need to tell R where the Sankey library is.  #I put it as a subdirectory to my current working directory (.)
-  sankeyPlot$setLib('http://timelyportfolio.github.io/rCharts_d3_sankey')    #We also need to point to an HTML template page
-  sankeyPlot$setTemplate(script =  "http://timelyportfolio.github.io/rCharts_d3_sankey/layouts/chart.html")
-  sankeyPlot$set(
-    data = df,
-    nodeWidth = 15,
-    nodePadding = 10,
-    layout = 32,
-    width = 750,
-    height = 500,
-    labelFormat = ".1%"
-  )
-  sankeyPlot$save(paste(name, '.html', sep = ""))}
+Enquiries::TeamSankey(enquiry = "INTERNAL SRM", filename = "InternalSRM_Teamflow")
 
-InternalSRM_ConType <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "INTERNAL SRM"), .(BEGIN, END), summarise, Total = length(MEMO_CONSUMER)) %>%
-                      mutate(END = paste(END, "_end", sep = "")) %>%
-                      arrange(-Total) 
+htmltools::includeHTML("C:/Enquiries/vignettes/InternalSRM_Teamflow.html")
 
-
-Filter <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "INTERNAL SRM"), .(BEGIN, END), summarise, Total = length(MEMO_CONSUMER)) %>%
-                      arrange(-Total) %>%
-                      mutate(cumulative = cumsum(Total)/sum(Total)) %>%
-                      filter(cumulative < 0.93) 
-
-InternalSRM_ConType[!(InternalSRM_ConType$BEGIN %in% Filter$BEGIN), ]$BEGIN <- "OTHER"
-
-
-EndUse_enquiry <- aggregate(Total ~ BEGIN + END, InternalSRM_ConType, sum) %>%
-                  mutate(Total = Total/sum(Total))
-
-colnames(EndUse_enquiry) <- c("source", "target", "value")
-
-sankeyPlot(EndUse_enquiry, name = "InternalSRM")
-
-htmltools::includeHTML("C:/Enquiries/InternalSRM.html")
+# tbl1 <- Enquiries::TeamSankey(ENQUIRY = "INTERNAL SRM")
+# 
+# Enquiries::sankeyPlot(tbl, name = "InternalSRM_Teamflow")
+# 
+# htmltools::includeHTML("C:/Enquiries/vignettes/InternalSRM_Teamflow.html")
 
 ```
 
@@ -935,27 +952,15 @@ p5
 
 ```{r Metering SRM, echo=FALSE}
 
-InternalSRM_ConType <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "METERING"), .(BEGIN, END), summarise, Total = length(MEMO_CONSUMER)) %>%
-                      mutate(END = paste(END, "_end")) %>%
-                      arrange(-Total) 
+Enquiries::TeamSankey(enquiry = "METERING", filename = "MeteringSRM_Teamflow")
 
+htmltools::includeHTML("C:/Enquiries/vignettes/MeteringSRM_Teamflow.html")
 
-Filter <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "METERING"), .(BEGIN, END), summarise, Total = length(MEMO_CONSUMER)) %>%
-                      arrange(-Total) %>%
-                      mutate(cumulative = cumsum(Total)/sum(Total)) %>%
-                      filter(cumulative < 0.93) 
-
-InternalSRM_ConType[!(InternalSRM_ConType$BEGIN %in% Filter$BEGIN), ]$BEGIN <- "OTHER"
-
-
-EndUse_enquiry <- aggregate(Total ~ BEGIN + END, InternalSRM_ConType, sum) %>%
-                  mutate(Total = Total/sum(Total))
-
-colnames(EndUse_enquiry) <- c("source", "target", "value")
-
-sankeyPlot(EndUse_enquiry, name = "MeteringSRM")
-
-htmltools::includeHTML("C:/Enquiries/MeteringSRM.html")
+# tbl2 <- Enquiries::TeamSankey(enquiry = "METERING")
+# 
+# Enquiries::sankeyPlot(tbl2, name = "METERINGSRM_Teamflow")
+# 
+# htmltools::includeHTML("C:/Enquiries/vignettes/InternalSRM_Teamflow.html")
 
 ```
 
@@ -1066,27 +1071,9 @@ p6
 
 ```{r TRADEWASTE SRM, echo=FALSE}
 
-InternalSRM_ConType <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "TRADE WASTE"), .(BEGIN, END), summarise, Total = length(MEMO_CONSUMER)) %>%
-                      mutate(END = paste(END, "_end")) %>%
-                      arrange(-Total) 
+Enquiries::TeamSankey(enquiry = "TRADE WASTE", filename = "TradeWasteSRM_Teamflow")
 
-
-Filter <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "TRADE WASTE"), .(BEGIN, END), summarise, Total = length(MEMO_CONSUMER)) %>%
-                      arrange(-Total) %>%
-                      mutate(cumulative = cumsum(Total)/sum(Total)) %>%
-                      filter(cumulative < 0.93) 
-
-InternalSRM_ConType[!(InternalSRM_ConType$BEGIN %in% Filter$BEGIN), ]$BEGIN <- "OTHER"
-
-
-EndUse_enquiry <- aggregate(Total ~ BEGIN + END, InternalSRM_ConType, sum) %>%
-                  mutate(Total = Total/sum(Total))
-
-colnames(EndUse_enquiry) <- c("source", "target", "value")
-
-sankeyPlot(EndUse_enquiry, name = "TradewasteSRM")
-
-htmltools::includeHTML("C:/Enquiries/TradewasteSRM.html")
+htmltools::includeHTML("C:/Enquiries/vignettes/TradeWasteSRM_Teamflow.html")
 
 ```
 
@@ -1186,17 +1173,17 @@ htmltools::includeHTML("C:/Enquiries/data/Enduse_SRM.html")
 Over 40,000 enquiries between Jun 2014 and July 2016 
 
 
-```{r Non-res SRM flow, echo=FALSE, message=FALSE, warning=FALSE}
+```{r Non-res SRM flow, eval = FALSE, echo=FALSE, message=FALSE, warning=FALSE}
 
 NONRES_SRM <- CallQual3 %>% filter(SRM == "SRM", USES == "NONRES")
-
-Users <- read.csv("file:///N:/ABR/Output_2_RootCauseSRMandRepeats/SRSSreports/GentrackUsers.csv",
-                  stringsAsFactors = FALSE) %>%
-         select(USER_ID, FULL_NAME, ï..DEPARTMENT, Access)
-
-NONRES_SRM <- NONRES_SRM %>%
-               left_join(Users, by = c("MEMO_CREATOR" = "USER_ID")) %>%
-               left_join(Users, by = c("SR_CLOSER" = "USER_ID"))
+# 
+# Users <- read.csv("file:///N:/ABR/Output_2_RootCauseSRMandRepeats/SRSSreports/GentrackUsers.csv",
+#                   stringsAsFactors = FALSE) %>%
+#          select(USER_ID, FULL_NAME, ï..DEPARTMENT, Access)
+# 
+# NONRES_SRM <- NONRES_SRM %>%
+#                left_join(Users, by = c("MEMO_CREATOR" = "USER_ID")) %>%
+#                left_join(Users, by = c("SR_CLOSER" = "USER_ID"))
 
 Filter <- ddply(NONRES_SRM, .(ENQUIRY), summarise, Total = length(MEMO_CONSUMER)) %>%
                       arrange(-Total) %>%

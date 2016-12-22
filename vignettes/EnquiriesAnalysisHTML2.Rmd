@@ -1,7 +1,7 @@
 ---
-title: "EnquiriesAnalysisHTML"
+title: "Non-residential SRM analysis 2014-2016"
 author: "Phil Farrell"
-date: "15 December 2016"
+date: "22 December 2016"
 output: html_document
 ---
 
@@ -10,7 +10,6 @@ output: html_document
 eval_cell = FALSE
 
 ```
-
 
 ####Setup
 
@@ -377,7 +376,7 @@ CallQual3[substr(CallQual3$MEMO_CONSUMER, 1, 2) == 99,]$ACC_TYPE <- "99"
 
 ```
 
-```{r Gentrack Users, eval= FALSE, include=FALSE}
+```{r Get gentack users report, eval=FALSE, include=FALSE}
 
 getData <- function() {
 
@@ -393,6 +392,9 @@ getData <- function() {
 
 getData()
 
+```
+
+```{r Gentrack Users, eval= eval_cell, include=FALSE}
 
 Users <- read.csv("file:///N:/ABR/Output_2_RootCauseSRMandRepeats/SRSSreports/GentrackUsers.csv",
                   stringsAsFactors = FALSE) %>%
@@ -493,7 +495,10 @@ CallQual_Customer <- dbReadTable(con=conn,
                          name="CallQual_Customer")
 ```
 
-####High level summary
+
+#Enquiries analysis {.tabset .tabset-fade}
+
+## High level summary
 
 ```{r overall summary, message=FALSE, warning=FALSE, include=FALSE}
 
@@ -554,7 +559,7 @@ As a group `r round(100 * sum(FYSRMSummary[FYSRMSummary$SRM == "SRM" & FYSRMSumm
 
 p1Annual <- ggplot(data = FYSRMSummary %>% arrange(-Total) %>% filter(SRM == "SRM"),
              aes(x = factor(USES),
-                 fill= factor(SRM),
+                 fill= reorder(SRM, Total),
                  y = Total)) 
 
 p1Annual <- p1Annual + geom_bar(stat="identity")
@@ -563,8 +568,13 @@ p1Annual <- p1Annual + facet_grid(facets=~FY)
 
 p1Annual <- p1Annual + scale_y_continuous(labels = comma)
 
-p1Annual
+# p1Annual <- p1Annual + theme(axis.title.x=element_blank(),
+#         axis.text.x=element_blank(),
+#         axis.ticks.x=element_blank())
 
+p1Annual <- p1Annual + labs(fill='SRM')
+
+p1Annual
 
 ```
 
@@ -611,7 +621,9 @@ SRM_enquiry <- SRM_enquiry %>%
 
 
 ```
-\n 
+
+## Enquiry types
+
 The graph and tables below show that the top three enquiry types (in order of importance) ending up as SRMs were `r TopThree_NRES[1:2]` and `r TopThree_NRES[3]` for non-residential as well as `r TopThree_RES[1:2]` and `r TopThree_RES[3]` for residential customers.   
 
 ```{r Annual SRM plots, echo=FALSE, message=FALSE, warning=FALSE}
@@ -625,10 +637,14 @@ SRM_enquiry$ENQUIRY <- factor(SRM_enquiry$ENQUIRY, levels = SRM_enquiry$ENQUIRY)
 p1Annual <- ggplot(data = SRM_enquiry,
              aes(x = USES,
                  y = Total,
-                 fill= ENQUIRY
+                 fill= reorder(ENQUIRY, Total)
                  )) 
 
 p1Annual <- p1Annual + geom_bar(stat="identity")
+
+# p1Annual <- p1Annual + theme(axis.title.x=element_blank(),
+#         axis.text.x=element_blank(),
+#         axis.ticks.x=element_blank())
 
 #p1Annual <- p1Annual + facet_grid(facets=~FY)
 
@@ -687,6 +703,8 @@ p1Annual
 #selectInput("p2", "", c("", ""))
 ```
 
+## NON-RES Enquiry anlaysis
+
 ```{r xtable2, echo=FALSE, results="asis"}
       
 print(xtable(SRM_enquiry_NRES, align = "cccr",latex.environments="center", format.args = list(digits = 2, format = c("d","d","s","f"))), type = "html", include.rownames=FALSE)
@@ -695,6 +713,8 @@ print(xtable(SRM_enquiry_NRES, align = "cccr",latex.environments="center", forma
 #print(xtable(SRM_enquiry_RES), type = "html")
 ```
 
+## RES Enquiry anlaysis
+
 ```{r xtable3, echo=FALSE, results="asis"}
 
 print(xtable(SRM_enquiry_RES, align = "cccr",latex.environments="center", format.args = list(digits = 2, format = c("d","d","s","f"))), type = "html", include.rownames=FALSE)
@@ -702,9 +722,9 @@ print(xtable(SRM_enquiry_RES, align = "cccr",latex.environments="center", format
 ```
 
 
-##Non-residential SRM analsysis
+#Non-residential SRM analysis {.tabset .tabset-fade}
 
-####Non-res customer analysis
+##Non-res customer analysis
 
 ```{r, include=FALSE}
 
@@ -741,18 +761,28 @@ SRM_NRES_type$ENQUIRY <- factor(SRM_NRES_type$ENQUIRY, levels = unique(SRM_NRES_
 p2 <- ggplot(data = SRM_NRES_type,
              aes(x = ACC_TYPE,
                  y = Total,
-                 fill= ENQUIRY,
-                 order = Total
+                 fill= reorder(ENQUIRY, Total),
+                 order = -Total
                  )) 
 
 p2 <- p2 + geom_bar(stat="identity")
 
+p2 <- p2 + labs(fill = "ENQUIRY")
+
+# p2 <- p2 + theme(axis.title.x=element_blank(),
+#         axis.text.x=element_blank(),
+#         axis.ticks.x=element_blank())
+
 #p1Annual <- p1Annual + facet_grid(facets=~FY)
 
 p2 
+
 ```
 
-####Internal SRMs
+
+##Internal SRMs {.tabset .tabset-fade}
+
+### Summary 
 
 `r 100 * round(sum(SRM_enquiry_NRES[SRM_enquiry_NRES$ENQUIRY == "INTERNAL SRM", 2])/sum(SRM_enquiry_NRES[,2]), 2)`% of all non-residential SRMs are raised as Internal SRMs. 
 
@@ -808,6 +838,7 @@ TopThree_ACTION <- paste(TopThree_ACTION[["SR_CALL_METHOD"]], paste("(", TopThre
 
 ```
 
+
 The graph below shows `r Internal`% of Internal SRMs were generated internally with the majority of the remainder in response to `r TopThree_ACTION[1]` enquires. 
 
 ```{r internal SRM contact type plot, echo=FALSE}
@@ -815,8 +846,8 @@ The graph below shows `r Internal`% of Internal SRMs were generated internally w
 p3 <- ggplot(data = InternalSRM_ConType,
              aes(x = factor(1),
                  y = Total,
-                 fill= SR_CALL_METHOD,
-                 order = Total
+                 fill = reorder(SR_CALL_METHOD, Total),
+                 #order = Total
                  )) 
 
 p3 <- p3 + geom_bar(stat="identity")
@@ -829,15 +860,21 @@ p3
 
 ```{r internal SRM, echo=FALSE}
 
-Enquiries::TeamSankey(enquiry = "INTERNAL SRM", filename = "InternalSRM_Teamflow")
+pathway <- Enquiries::TeamSankey2(enquiry = "INTERNAL SRM", filename = "InternalSRM_Teamflow")
+
+#Enquiries::TeamSankey(enquiry = "INTERNAL SRM", filename = "InternalSRM_Teamflow")
+
+```
+
+### SRM flow
+
+The graph below shows that the most common pathways for Internal SRMs are:
+* one `r pathway$Descr[1]` 
+* two `r pathway$Descr[2]` 
+
+```{r internal SRM sankey, echo=FALSE}
 
 htmltools::includeHTML("C:/Enquiries/vignettes/InternalSRM_Teamflow.html")
-
-# tbl1 <- Enquiries::TeamSankey(ENQUIRY = "INTERNAL SRM")
-# 
-# Enquiries::sankeyPlot(tbl, name = "InternalSRM_Teamflow")
-# 
-# htmltools::includeHTML("C:/Enquiries/vignettes/InternalSRM_Teamflow.html")
 
 ```
 
@@ -856,6 +893,8 @@ TopThree_ACTION <- paste(TopThree_ACTION[["ACTION"]], paste("(", TopThree_ACTION
 
 ```
 
+### SRM types
+
 The graph show that the top three SRM types (in order of importance) raised for the enquiry type "Internal SRM" were `r TopThree_ACTION[1:2]` and `r TopThree_ACTION[3]`. 
 
 ```{r Action plot, echo=FALSE}
@@ -863,11 +902,17 @@ The graph show that the top three SRM types (in order of importance) raised for 
 p4 <- ggplot(data = InternalSRM_Action,
              aes(x = factor(1),
                  y = Total,
-                 fill= ACTION,
+                 fill= reorder(ACTION, Total),
                  order = Total
                  )) 
 
 p4 <- p4 + geom_bar(stat="identity")
+
+p4 <- p4 + theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+p4 <- p4 + labs(fill='ENQUIRY')
 
 #p1Annual <- p1Annual + facet_grid(facets=~FY)
 
@@ -875,8 +920,11 @@ p4
 
 ```
 
-####Metering
 
+
+##Metering {.tabset .tabset-fade}
+
+### Summary
 `r 100 * round(sum(SRM_enquiry_NRES[SRM_enquiry_NRES$ENQUIRY == "METERING", 2])/sum(SRM_enquiry_NRES[,2]), 2)`% of all non-residential SRMs are raised as Metering SRMs. 
 
 ```{r Metering and action, include=FALSE}
@@ -931,18 +979,24 @@ TopThree_ACTION <- paste(TopThree_ACTION[["SR_CALL_METHOD"]], paste("(", TopThre
 
 ```
 
-The graph below shows `r Internal`% of Internal SRMs were generated internally with the majority of the remainder in response to `r TopThree_ACTION[1]` enquires. 
+The graph below shows `r Internal`% of metering SRMs were generated internally with the majority of the remainder in response to `r TopThree_ACTION[1]` enquires. 
 
 ```{r METERING contact type plot, echo=FALSE}
 
 p5 <- ggplot(data = InternalSRM_ConType,
              aes(x = factor(1),
                  y = Total,
-                 fill= SR_CALL_METHOD,
+                 fill= reorder(SR_CALL_METHOD, Total),
                  order = Total
                  )) 
 
 p5 <- p5 + geom_bar(stat="identity")
+
+p5 <- p5 + theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+p5 <- p5 + labs(fill='CONTACT METHOD')
 
 #p1Annual <- p1Annual + facet_grid(facets=~FY)
 
@@ -950,17 +1004,23 @@ p5
 
 ```
 
-```{r Metering SRM, echo=FALSE}
+```{r Metering SRM, include=FALSE}
 
-Enquiries::TeamSankey(enquiry = "METERING", filename = "MeteringSRM_Teamflow")
+pathway <- Enquiries::TeamSankey2(enquiry = "METERING", filename = "MeteringSRM_Teamflow")
+
+```
+
+### SRM flow
+
+The graph below shows that the most common pathways for Internal SRMs are:
+* `r pathway$Descr[1]` 
+* `r pathway$Descr[2]`
+
+```{r Metering SRM sankey, echo=FALSE}
+
+# Enquiries::TeamSankey(enquiry = "METERING", filename = "MeteringSRM_Teamflow")
 
 htmltools::includeHTML("C:/Enquiries/vignettes/MeteringSRM_Teamflow.html")
-
-# tbl2 <- Enquiries::TeamSankey(enquiry = "METERING")
-# 
-# Enquiries::sankeyPlot(tbl2, name = "METERINGSRM_Teamflow")
-# 
-# htmltools::includeHTML("C:/Enquiries/vignettes/InternalSRM_Teamflow.html")
 
 ```
 
@@ -974,6 +1034,8 @@ TopThree_ACTION <- paste(TopThree_ACTION[["ACTION"]], paste("(", TopThree_ACTION
 
 ```
 
+### SRM types
+
 The graph show that the top three SRM types (in order of importance) raised for the enquiry type "Metering" were `r TopThree_ACTION[1:2]` and `r TopThree_ACTION[3]`. 
 
 ```{r Action plot Metering, echo=FALSE}
@@ -981,11 +1043,17 @@ The graph show that the top three SRM types (in order of importance) raised for 
 p4 <- ggplot(data = MeteringSRM_Action,
              aes(x = factor(1),
                  y = Total,
-                 fill= ACTION,
+                 fill= reorder(ACTION, Total),
                  order = Total
                  )) 
 
 p4 <- p4 + geom_bar(stat="identity")
+
+p4 <- p4 + theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+p4 <- p4 + labs(fill='ENQUIRY')
 
 #p1Annual <- p1Annual + facet_grid(facets=~FY)
 
@@ -994,8 +1062,11 @@ p4
 ```
 
 
-####Trade Waste
 
+
+##Trade Waste {.tabset .tabset-fade}
+
+### Summary
 `r 100 * round(sum(SRM_enquiry_NRES[SRM_enquiry_NRES$ENQUIRY == "TRADE WASTE", 2])/sum(SRM_enquiry_NRES[,2]), 2)`% of all non-residential SRMs are raised as Trade waste SRMs. 
 
 ```{r Trade Waste and action, include=FALSE}
@@ -1050,28 +1121,44 @@ TopThree_ACTION <- paste(TopThree_ACTION[["SR_CALL_METHOD"]], paste("(", TopThre
 
 ```
 
-The graph below shows `r Internal`% of Internal SRMs were generated internally with the majority of the remainder in response to `r TopThree_ACTION[1]` enquires. 
+The graph below shows `r Internal`% of trade waste SRMs were generated internally with the majority of the remainder in response to `r TopThree_ACTION[1]` enquires. 
 
 ```{r TRADEWASTE contact type plot, echo=FALSE}
 
 p6 <- ggplot(data = InternalSRM_ConType,
              aes(x = factor(1),
                  y = Total,
-                 fill= SR_CALL_METHOD,
+                 fill= reorder(SR_CALL_METHOD, Total),
                  order = Total
                  )) 
 
 p6 <- p6 + geom_bar(stat="identity")
 
+p6 <- p6 + theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+p6 <- p6 + labs(fill='CONTACT METHOD')
 #p1Annual <- p1Annual + facet_grid(facets=~FY)
 
 p6
 
 ```
 
-```{r TRADEWASTE SRM, echo=FALSE}
+```{r TRADEWASTE SRM, include=FALSE}
 
-Enquiries::TeamSankey(enquiry = "TRADE WASTE", filename = "TradeWasteSRM_Teamflow")
+pathway <- Enquiries::TeamSankey2(enquiry = "TRADE WASTE", filename = "TradeWasteSRM_Teamflow")
+
+```
+### SRM flow
+The graph below shows that the most common pathways for Internal SRMs are:
+* `r pathway$Descr[1]` 
+* `r pathway$Descr[2]`
+ 
+
+```{r TRADEWASTE SRM sankey, echo=FALSE}
+
+# Enquiries::TeamSankey(enquiry = "TRADE WASTE", filename = "TradeWasteSRM_Teamflow")
 
 htmltools::includeHTML("C:/Enquiries/vignettes/TradeWasteSRM_Teamflow.html")
 
@@ -1087,6 +1174,8 @@ TopThree_ACTION <- paste(TopThree_ACTION[["ACTION"]], paste("(", TopThree_ACTION
 
 ```
 
+### SRM types
+
 The graph show that the top three SRM types (in order of importance) raised for the enquiry type "Trade waste" were `r TopThree_ACTION[1:2]` and `r TopThree_ACTION[3]`. 
 
 ```{r Action plot Trade Waste, echo=FALSE}
@@ -1094,11 +1183,17 @@ The graph show that the top three SRM types (in order of importance) raised for 
 p5 <- ggplot(data = TradeWasteSRM_Action,
              aes(x = factor(1),
                  y = Total,
-                 fill= ACTION,
+                 fill= reorder(ACTION, Total),
                  order = Total
                  )) 
 
 p5 <- p5 + geom_bar(stat="identity")
+
+p5 <- p5 + theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+p5 <- p5 + labs(fill='ENQUIRY')
 
 #p1Annual <- p1Annual + facet_grid(facets=~FY)
 

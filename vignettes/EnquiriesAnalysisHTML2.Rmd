@@ -2,6 +2,7 @@
 title: "Non-residential SRM analysis 2014-2016"
 author: "Phil Farrell"
 date: "22 December 2016"
+runtime: shiny
 output: html_document
 ---
 
@@ -18,7 +19,7 @@ eval_cell = FALSE
 #setwd("C:/Enquiries")
 knitr::opts_chunk$set(echo = TRUE)
 
-packages <- c("readr", "dplyr", "plyr", "tidyr", "ggplot2", "stringr", "lubridate", "sqldf", "randomNames", "data.table", "devtools", "scales", "knitr", "xtable", "stringi")
+packages <- c("readr", "dplyr", "plyr", "tidyr", "ggplot2", "stringr", "lubridate", "sqldf", "randomNames", "data.table", "devtools", "scales", "knitr", "xtable", "stringi", "shiny")
 
 p <- installed.packages()
 
@@ -502,9 +503,9 @@ CallQual_Customer <- dbReadTable(con=conn,
 
 ```{r overall summary, message=FALSE, warning=FALSE, include=FALSE}
 
-x <- length(unique(CallQual3$MEMO_CONSUMER))
+# x <- length(unique(CallQual3$MEMO_CONSUMER))
 
-Filter <- ddply(CallQual3, .(ENQUIRY), summarise, Total = length(MEMO_CONSUMER)/x) %>%
+Filter <- ddply(CallQual3, .(ENQUIRY), summarise, Total = length(MEMO_CONSUMER)) %>%
                       arrange(-Total) %>%
                       mutate(cumulative = cumsum(Total)/sum(Total)) %>%
                       filter(cumulative < 0.93)
@@ -703,7 +704,7 @@ p1Annual
 #selectInput("p2", "", c("", ""))
 ```
 
-## NON-RES Enquiry anlaysis
+## NON-RES Enquiry analysis
 
 ```{r xtable2, echo=FALSE, results="asis"}
       
@@ -713,7 +714,7 @@ print(xtable(SRM_enquiry_NRES, align = "cccr",latex.environments="center", forma
 #print(xtable(SRM_enquiry_RES), type = "html")
 ```
 
-## RES Enquiry anlaysis
+## RES Enquiry analysis
 
 ```{r xtable3, echo=FALSE, results="asis"}
 
@@ -728,7 +729,7 @@ print(xtable(SRM_enquiry_RES, align = "cccr",latex.environments="center", format
 
 ```{r, include=FALSE}
 
-SRM_NRES_type <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES"), .(ACC_TYPE, ENQUIRY), summarise, Total = length(MEMO_CONSUMER)) %>%
+SRM_NRES_type <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES"), .(ACC_TYPE, ENQUIRY, FY), summarise, Total = length(MEMO_CONSUMER)) %>%
                       arrange(-Total) #%>%
                       #mutate(cumulative = cumsum(Total)/sum(Total))# %>%
                       # filter(cumulative < 0.93)
@@ -746,7 +747,7 @@ SRM_NRES_type_filter <- SRM_NRES_type_filter %>%
 
 SRM_NRES_type[!(SRM_NRES_type$ENQUIRY %in% SRM_NRES_type_filter$ENQUIRY), ]$ENQUIRY <- "OTHER"
 
-SRM_NRES_type <- aggregate(Total ~ ACC_TYPE + ENQUIRY, SRM_NRES_type, sum)
+SRM_NRES_type <- aggregate(Total ~ ACC_TYPE + ENQUIRY + FY, SRM_NRES_type, sum)
 
 SRM_NRES_type <- SRM_NRES_type %>%
                  arrange(Total)
@@ -758,7 +759,9 @@ SRM_NRES_type$ENQUIRY <- factor(SRM_NRES_type$ENQUIRY, levels = unique(SRM_NRES_
 
 ```{r SRM by type, echo=FALSE}
 
-p2 <- ggplot(data = SRM_NRES_type,
+
+
+renderPlot({p2 <- ggplot(data = SRM_NRES_type,
              aes(x = ACC_TYPE,
                  y = Total,
                  fill= reorder(ENQUIRY, Total),
@@ -775,10 +778,121 @@ p2 <- p2 + labs(fill = "ENQUIRY")
 
 #p1Annual <- p1Annual + facet_grid(facets=~FY)
 
-p2 
+p2}) 
 
 ```
 
+##Shiny
+
+```{r, eval=FALSE, include=FALSE}
+shinyApp(
+  ui = fluidPage(
+    selectInput("FY", label = "Financial year:", choices = c(2015, 2016, multiple=TRUE), selected = 2016),
+    
+    # sliderInput("amount_adjust", 
+    #             label = "Amount",min = 1, max = 10, value = 1, step = 1),
+    plotOutput("Enquirytype")
+  ),
+  server = function(input, output) {
+    # set.seed(1234)
+    # n <- 200
+    # sdate <- as.POSIXct("2015-11-11 00:00:00",tz="UCT")
+    # edate <- as.POSIXct("2015-11-11 23:59:59",tz="UCT")
+    
+    
+    # d3 <- data.frame(
+    #   ACC_TYPE =  SRM_NRES_type$ACC_TYPE,
+    #   ENQUIRY = SRM_NRES_type$ENQUIRY,
+    #   FY = SRM_NRES_type$FY,
+    #   Total = SRM_NRES_type$Total
+    
+    d3 <- SRM_NRES_type 
+    d3 <- d3[ order(d3$FY), ]
+    
+    output$Enquirytype <- renderPlot({
+      d4 <- d3[ d3$FY==input$FY, ] 
+      # d4$AdjAmount <- input$amount_adjust*d4$Amount
+      ggplot(data=d4,aes(x = ACC_TYPE, y = Total, fill= reorder(ENQUIRY, Total))) + 
+        geom_bar(stat="Identity") +
+        labs(fill = "ENQUIRY")
+    })
+  },
+  options = list(height = 800)
+)
+```
+
+```{r echo = FALSE, eval=FALSE, include=FALSE}
+
+selectInput("FY", label = "Financial year:", choices = c(2015, 2016, multiple=TRUE), selected = 2016)
+
+```
+
+```{r echo = FALSE, eval=FALSE, include=FALSE}
+
+renderPlot({
+      # d4 <- SRM_NRES_type[ SRM_NRES_type$FY==input$FY, ]
+      # d4$AdjAmount <- input$amount_adjust*d4$Amount
+      ggplot(data=SRM_NRES_type[ SRM_NRES_type$FY==input$FY, ],aes(x = ACC_TYPE, y = Total, fill= reorder(ENQUIRY, Total))) +
+        geom_bar(stat="Identity") +
+        labs(fill = "ENQUIRY")
+    })
+
+# renderPlot({
+#       d3 <- data.frame(
+#           ACC_TYPE =  SRM_NRES_type$ACC_TYPE,
+#           ENQUIRY = SRM_NRES_type$ENQUIRY,
+#           FY = SRM_NRES_type$FY,
+#           Total = SRM_NRES_type$Total
+#         )
+#       d4 <- d3[ d3$FY==input$FY, ] 
+#       # d4$AdjAmount <- input$amount_adjust*d4$Amount
+#       ggplot(data=d4,aes(x = ACC_TYPE, y = Total, fill= reorder(ENQUIRY, Total))) + 
+#         geom_bar(stat="Identity") +
+#         labs(fill = "ENQUIRY")
+#     })
+
+```
+
+```{r echo = FALSE, eval=FALSE, include=FALSE}
+
+shinyApp(
+  
+  ui = fluidPage(
+    selectInput("FY", label = "Financial year:", choices = c(2015, 2016, multiple=TRUE), selected = 2016),
+    plotOutput("EnquiryPlot")
+  ),
+  
+  server = function(input, output) {
+    output$EnquiryPlot <- renderPlot({
+      ggplot(data=SRM_NRES_type[ SRM_NRES_type$FY==input$FY, ],aes(x = ACC_TYPE, y = Total, fill= reorder(ENQUIRY, Total))) + 
+        geom_bar(stat="Identity") +
+        labs(fill = "ENQUIRY")
+    })
+  },
+  
+  options = list(height = 500)
+)
+
+```
+
+```{r, echo = FALSE}
+
+inputPanel(
+  selectInput("FY", label = "Financial year:", choices = c(2015, 2016, multiple=TRUE), selected = 2016)
+)
+
+renderPlot({
+  
+  ggplot(data=SRM_NRES_type[ SRM_NRES_type$FY==input$FY, ],aes(x = ACC_TYPE, y = Total, fill= reorder(ENQUIRY, Total))) + 
+         geom_bar(stat="Identity") +
+         labs(fill = "ENQUIRY")
+  # hist(faithful$eruptions, probability = TRUE, breaks = as.numeric(input$n_breaks),
+  #      xlab = "Duration (minutes)", main = "Geyser eruption duration")
+  # 
+  # dens <- density(faithful$eruptions, adjust = input$bw_adjust)
+  # lines(dens, col = "blue")
+})
+```
 
 ##Internal SRMs {.tabset .tabset-fade}
 
@@ -860,7 +974,7 @@ p3
 
 ```{r internal SRM, echo=FALSE}
 
-pathway <- Enquiries::TeamSankey2(enquiry = "INTERNAL SRM", filename = "InternalSRM_Teamflow")
+pathway <- Enquiries::TeamSankey2(df = CallQual3, enquiry = "INTERNAL SRM", filename = "InternalSRM_Teamflow")
 
 #Enquiries::TeamSankey(enquiry = "INTERNAL SRM", filename = "InternalSRM_Teamflow")
 
@@ -1006,7 +1120,7 @@ p5
 
 ```{r Metering SRM, include=FALSE}
 
-pathway <- Enquiries::TeamSankey2(enquiry = "METERING", filename = "MeteringSRM_Teamflow")
+pathway <- Enquiries::TeamSankey2(df = CallQual3, enquiry = "METERING", filename = "MeteringSRM_Teamflow")
 
 ```
 
@@ -1147,7 +1261,7 @@ p6
 
 ```{r TRADEWASTE SRM, include=FALSE}
 
-pathway <- Enquiries::TeamSankey2(enquiry = "TRADE WASTE", filename = "TradeWasteSRM_Teamflow")
+pathway <- Enquiries::TeamSankey2(df = CallQual3, enquiry = "TRADE WASTE", filename = "TradeWasteSRM_Teamflow")
 
 ```
 ### SRM flow
@@ -1204,7 +1318,7 @@ p5
 
 The graph below shows over `r 2 + 2` percent of all customer enquiries between Jun 2014 and July 2016 were resolved at first point of contact. Approximately X percent of all customer enquiries were from residential type customers. 
 
-```{r Sankey graph, echo=FALSE, message=FALSE, warning=FALSE}
+```{r Sankey graph, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
 
 sankeyPlot <- function(df, name){
   sankeyPlot <- NULL

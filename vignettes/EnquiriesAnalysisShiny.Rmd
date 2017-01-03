@@ -19,7 +19,7 @@ eval_cell = FALSE
 #setwd("C:/Enquiries")
 knitr::opts_chunk$set(echo = TRUE)
 
-packages <- c("readr", "dplyr", "plyr", "tidyr", "ggplot2", "stringr", "lubridate", "sqldf", "randomNames", "data.table", "devtools", "scales", "knitr", "xtable", "stringi", "shiny")
+packages <- c("readr", "dplyr", "plyr", "tidyr", "ggplot2", "stringr", "lubridate", "sqldf", "randomNames", "data.table", "devtools", "scales", "knitr", "xtable", "stringi", "shiny", "zoo")
 
 p <- installed.packages()
 
@@ -527,10 +527,12 @@ There were `r sum(EnquiryCountAnnual$Total)` customer Enquiries logged in Gentra
 
 ```{r xtable1, echo=FALSE, results="asis"}
 
-FY15 <- interval(ymd(20140701), ymd(20150630))
-FY16 <- interval(ymd(20150701), ymd(20160630))
+# FY15 <- interval(ymd_hms("20140701 00:00:00"), ymd_hms("20150630 23:59:59"))
+# FY16 <- interval(ymd_hms("20150701 00:00:00"), ymd_hms("20160630 24:00:00"))
                                                              
-CallQual3$FY <- ifelse(CallQual3$MEMO_DATETIME %within% FY15, 2015, 2016)
+# CallQual3$FY <- ifelse(CallQual3$MEMO_DATETIME %within% FY15, 2015, 2016)
+
+CallQual3$FY <- ifelse(CallQual3$MEMO_DATETIME < ymd("20150701"), 2015, 2016)
 
 FYSummary <- ddply(CallQual3, .(FY, USES), summarise, Total = length(MEMO_CONSUMER)) %>%
              spread(USES, Total) %>%
@@ -729,8 +731,39 @@ print(xtable(SRM_enquiry_RES, align = "cccr",latex.environments="center", format
 
 ```{r, include=FALSE}
 
-CallQual3$MONTH <- lubridate::month(CallQual3$MEMO_DATETIME, label = TRUE)
-CallQual3$QUARTER <- quarter(CallQual3$MEMO_DATETIME)
+getYearQuarter <- function(x, 
+                           firstMonth=7, 
+                           fy.prefix='FY', 
+                           quarter.prefix='Q',
+                           sep='-',
+                           level.range=c(min(x), max(x)) ) {
+  if(level.range[1] > min(x) | level.range[2] < max(x)) {
+    warning(paste0('The range of x is greater than level.range. Values ',
+                   'outside level.range will be returned as NA.'))
+  }
+  quarterString <- function(d) {
+    year <- as.integer(format(d, format='%Y'))
+    month <- as.integer(format(d, format='%m'))
+    y <- ifelse(firstMonth > 1 & month >= firstMonth, year+1, year)  
+    q <- cut( (month - firstMonth) %% 12, breaks=c(-Inf,2,5,8,Inf), 
+              labels=paste0(quarter.prefix, 1:4))
+    return(paste0(fy.prefix, y, sep, q))
+  }
+  vals <- quarterString(x)
+  levels <- unique(quarterString(seq(
+    as.Date(format(level.range[1], '%Y-%m-01')), 
+    as.Date(format(level.range[2], '%Y-%m-28')), by='month')))
+  return(factor(vals, levels=levels, ordered=TRUE))
+}
+
+# CallQual3$MONTH <- lubridate::month(CallQual3$MEMO_DATETIME, label = TRUE)
+CallQual3$MONTH <- format(CallQual3$MEMO_DATETIME, "%Y-%m")
+# CallQual3$MONTH <- as.Date(CallQual3$MEMO_DATETIME, format = "%m-%Y")
+# CallQual3$MONTH <- as.yearmon(CallQual3$MEMO_DATETIME)
+# CallQual3$QUARTER <- quarter(CallQual3$MEMO_DATETIME)
+# CallQual3$QUARTER <- lubridate::quarter(CallQual3$MEMO_DATETIME, with_year = TRUE)
+
+CallQual3$QUARTER <- getYearQuarter(CallQual3$MEMO_DATETIME)
 
 SRM_NRES_type <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES"), .(ACC_TYPE, ENQUIRY, MONTH, QUARTER, FY), summarise, Total = length(MEMO_CONSUMER)) %>%
                       arrange(-Total)
@@ -1028,8 +1061,8 @@ renderPlot({p3})
 ```{r internal SRM contact type plot Shiny, echo=FALSE}
 
 inputPanel(
-  selectInput("FYConType", label = "Financial year:", choices = c("All", unique(InternalSRM_ConType$FY)), selected = 2016),
-  selectInput("XConType", label = "xaxis:", choices = unique(InternalSRM_ConType$XAXIS, "NONE"), selected = "NONE")
+  selectInput("FYConType", label = "Financial year:", choices = c("All", unique(InternalSRM_ConType$FY)), selected = "All"),
+  selectInput("XConType", label = "xaxis:", choices = c(unique(InternalSRM_ConType$XAXIS), "NONE"), selected = "NONE")
 )
 
 renderPlot({
@@ -1047,9 +1080,16 @@ renderPlot({
   
   if(value2 != "NONE") {
   
+    if(value2 == "MONTH") {
+      ggplot(data=InternalSRM_ConType[FY %in% value & XAXIS %in% value2], aes(x = as.factor(as.yearmon(VALUE)), y = Total, fill = reorder(SR_CALL_METHOD, Total))) +
+         geom_bar(stat="Identity") +
+         labs(fill = "SR_CALL_METHOD")
+    }
+    else {
     ggplot(data=InternalSRM_ConType[FY %in% value & XAXIS %in% value2], aes(x = VALUE, y = Total, fill = reorder(SR_CALL_METHOD, Total))) +
          geom_bar(stat="Identity") +
          labs(fill = "SR_CALL_METHOD") 
+    }
   }
   
   else {
@@ -1077,14 +1117,95 @@ pathway <- Enquiries::TeamSankey2(df = CallQual3, enquiry = "INTERNAL SRM", file
 ### SRM flow
 
 The graph below shows that the most common pathways for Internal SRMs are:
-* one `r pathway$Descr[1]` 
-* two `r pathway$Descr[2]` 
+* one `r pathway$Descr[1]`
+* two `r pathway$Descr[2]`
 
 ```{r internal SRM sankey, echo=FALSE}
 
-htmltools::includeHTML("C:/Enquiries/vignettes/InternalSRM_Teamflow.html")
+TeamSankey3 <- function(df = CallQual3, enquiry){
 
-```
+  TeamFlow <- ddply(df %>%
+                      filter(SRM == "SRM", USES == "NONRES", ENQUIRY == enquiry) %>%
+                      mutate(BEGIN = paste0(BEGIN, "_", Access.x),
+                             END = paste0(END, "_", Access.x)),
+                    .(BEGIN, END), summarise, Total = length(MEMO_CONSUMER)) %>%
+    # mutate(BEGIN = paste(BEGIN, "_end", sep = "")) %>%
+    arrange(-Total)
+
+
+  Filter <- TeamFlow %>%
+    arrange(-Total) %>%
+    mutate(cumulative = cumsum(Total)/sum(Total)) %>%
+    filter(cumulative < 0.93)
+
+  TeamFlow[!(TeamFlow$END %in% Filter$END), ]$END <- "OTHERDEP"
+  TeamFlow[!(TeamFlow$BEGIN %in% Filter$BEGIN), ]$BEGIN <- "OTHERDEP"
+
+  Begin_team <- aggregate(Total ~ BEGIN + END, TeamFlow, sum) %>%
+    mutate(Total = Total/sum(Total),
+           BEGIN = paste(BEGIN, "_begin", sep = ""),
+           END = paste(END, "_end", sep = "")) %>%
+    arrange(-Total)
+
+  colnames(Begin_team) <- c("source", "target", "value")
+  
+  return(Begin_team)
+}
+
+renderChart3 <- function( expr, env = parent.frame(), quoted = FALSE ){
+  func <- shiny::exprToFunction(expr, env, quoted)
+  function() {
+    rChart_ <- func()
+    cht_style <- sprintf("<style>.rChart {width: %spx; height: %spx} </style>", 
+                         rChart_$params$width, rChart_$params$height)
+    cht <- paste(
+      capture.output(cat(
+        rChart_$print()
+        ,render_template(
+          rChart_$templates$afterScript %||% 
+          "<script></script>"
+          , list(chartId = rChart_$params$dom, container = rChart_$container)
+        )
+        ,sep = ""
+      ))
+      , collapse = "\n")
+    HTML(paste(c(cht_style, cht), collapse = "\n"))
+  }
+}
+
+shinyApp(
+  ui = showOutput('sankey', 'C:/rCharts_d3_sankey/libraries/widgets/d3_sankey'),
+
+  server = function( input, output ) {
+
+   output$sankey <-  renderChart3({
+    sankeyPlot <- rCharts$new()
+    sankeyPlot$setLib("http://timelyportfolio.github.io/rCharts_d3_sankey")
+
+    sankeyPlot$set(
+      data = TeamSankey3(df = CallQual3, enquiry = "INTERNAL SRM"),
+      # nodeWidth = 15,
+      # nodePadding = 10,
+      # layout = 32,
+      # width = 500,
+      # height = 500
+      nodeWidth = 15,
+    nodePadding = 10,
+    layout = 32,
+    width = 750,
+    height = 500,
+    labelFormat = ".1%"
+    )
+
+    sankeyPlot$setTemplate( script =  "http://timelyportfolio.github.io/rCharts_d3_sankey/layouts/chart.html")
+
+    return(sankeyPlot)
+   })
+
+  }
+)
+
+```  
 
 ```{r Top three actions, include=FALSE}
 # 
@@ -1167,7 +1288,6 @@ renderPlot({
 ```
 
 
-
 ##Metering {.tabset .tabset-fade}
 
 ### Summary
@@ -1175,21 +1295,13 @@ renderPlot({
 
 ```{r Metering and action, include=FALSE}
 
-# CallQual3[CallQual3$SRM == TRUE,]$SRM <- "SRM"
-# CallQual3[CallQual3$SRM == FALSE,]$SRM <- "RESOLVED"
-
 MeteringSRM_Action <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "METERING"), .(FY, QUARTER, MONTH, ACC_TYPE, ACTION), summarise, Total = length(MEMO_CONSUMER)) %>%
-                      arrange(-Total) #%>%
-                      #mutate(cumulative = cumsum(Total)/sum(Total))# %>%
-                      # filter(cumulative < 0.93)
+                      arrange(-Total)
 
 MeteringSRM_Action_filter <- aggregate(Total ~ ACTION, MeteringSRM_Action, sum)
 
 MeteringSRM_Action_filter <- MeteringSRM_Action_filter %>%
                    arrange(-Total) %>%  
-                   # group_by(ENQUIRY) %>%
-                   # summarise(Total = sum(Total)) %>%
-                   # ungroup %>%
                    mutate(CumulativePercent = cumsum(Total)/sum(Total)) %>%
                    filter(CumulativePercent < 0.99) %>%
                    select(ACTION, Total, CumulativePercent)
@@ -1203,11 +1315,16 @@ MeteringSRM_Action <- MeteringSRM_Action %>%
 
 # SRM_NRES_type$ENQUIRY <- factor(SRM_NRES_type$ENQUIRY, levels = unique(SRM_NRES_type$ENQUIRY))
 
+
+
 ```
 
 These Metering SRMs are raised against the owner `r 100 * round(sum(MeteringSRM_Action[MeteringSRM_Action$ACC_TYPE == "OWNER", 6])/sum(MeteringSRM_Action[,6]), 2)`% of the time followed by `r 100 * round(sum(MeteringSRM_Action[MeteringSRM_Action$ACC_TYPE == "TENANT", 6])/sum(MeteringSRM_Action[,6]), 2)`% against the tenant.   
 
 ```{r METERING SRM contact type, include=FALSE}
+
+MeteringSRM_Action <- MeteringSRM_Action %>%
+                       gather(XAXIS, VALUE, ACC_TYPE, QUARTER:MONTH)
 
 MeteringSRM_ConType <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "METERING"), .(SR_CALL_METHOD), summarise, Total = length(MEMO_CONSUMER)) %>%
                       arrange(-Total) %>%
@@ -1223,11 +1340,20 @@ TopThree_ACTION <- MeteringSRM_ConType %>% filter(percent > 0, SR_CALL_METHOD !=
 
 TopThree_ACTION <- paste(TopThree_ACTION[["SR_CALL_METHOD"]], paste("(", TopThree_ACTION[["percent"]], "%", ")", sep = ""))
 
+MeteringSRM_ConType <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "METERING"), .(FY, QUARTER, MONTH, ACC_TYPE, SR_CALL_METHOD), summarise, Total = length(MEMO_CONSUMER)) %>%
+                      arrange(-Total) %>%
+                      mutate(percent = 100 * round(Total/sum(Total),2))
+
+MeteringSRM_ConType <- aggregate(Total ~ FY + QUARTER + MONTH + ACC_TYPE + SR_CALL_METHOD, MeteringSRM_ConType, sum)
+
+MeteringSRM_ConType <- MeteringSRM_ConType %>%
+                       gather(XAXIS, VALUE, ACC_TYPE, MONTH:QUARTER)
+
 ```
 
 The graph below shows `r Internal`% of metering SRMs were generated internally with the majority of the remainder in response to `r TopThree_ACTION[1]` enquires. 
 
-```{r METERING contact type plot, echo=FALSE}
+```{r METERING contact type plot, eval=FALSE, include=FALSE}
 
 p5 <- ggplot(data = InternalSRM_ConType,
              aes(x = factor(1),
@@ -1250,6 +1376,54 @@ renderPlot({p5})
 
 ```
 
+```{r METERING contact type plot Shiny, echo=FALSE}
+
+inputPanel(
+  selectInput("FYConType2", label = "Financial year:", choices = c("All", unique(MeteringSRM_ConType$FY)), selected = "All"),
+  selectInput("XConType2", label = "xaxis:", choices = c(unique(MeteringSRM_ConType$XAXIS), "NONE"), selected = "NONE")
+)
+
+renderPlot({
+
+  value <- input$FYConType2
+    if(value == "All"){
+      
+      value <- unique(MeteringSRM_ConType$FY)
+      
+    }
+  
+  value2 <- input$XConType2
+  
+  MeteringSRM_ConType <- data.table(MeteringSRM_ConType)
+  
+  if(value2 != "NONE") {
+  
+    if(value2 == "MONTH") {
+      ggplot(data=MeteringSRM_ConType[FY %in% value & XAXIS %in% value2], aes(x = as.factor(as.yearmon(VALUE)), y = Total, fill = reorder(SR_CALL_METHOD, Total))) +
+         geom_bar(stat="Identity") +
+         labs(fill = "SR_CALL_METHOD")
+    }
+    else {
+    ggplot(data=MeteringSRM_ConType[FY %in% value & XAXIS %in% value2], aes(x = VALUE, y = Total, fill = reorder(SR_CALL_METHOD, Total))) +
+         geom_bar(stat="Identity") +
+         labs(fill = "SR_CALL_METHOD") 
+    }
+  }
+  
+  else {
+    ggplot(data=MeteringSRM_ConType[FY %in% value], aes(x = factor(1), y = Total, fill = reorder(SR_CALL_METHOD, Total))) +
+              geom_bar(stat="Identity") +
+              labs(fill = "SR_CALL_METHOD") 
+    }
+  
+  # InternalSRM_ConType <- InternalSRM_ConType %>% filter(FY %in% value, XAXIS %in% value2)
+  
+  # ggplot(data=InternalSRM_ConType[FY %in% value & XAXIS %in% value2], aes(x = VALUE, y = Total, fill = reorder(SR_CALL_METHOD, Total))) +
+  #        geom_bar(stat="Identity") +
+  #        labs(fill = "SR_CALL_METHOD")
+})
+```
+
 ```{r Metering SRM, include=FALSE}
 
 pathway <- Enquiries::TeamSankey2(df = CallQual3, enquiry = "METERING", filename = "MeteringSRM_Teamflow")
@@ -1266,7 +1440,37 @@ The graph below shows that the most common pathways for Internal SRMs are:
 
 # Enquiries::TeamSankey(enquiry = "METERING", filename = "MeteringSRM_Teamflow")
 
-htmltools::includeHTML("C:/Enquiries/vignettes/MeteringSRM_Teamflow.html")
+shinyApp(
+  ui = showOutput('sankey', 'C:/rCharts_d3_sankey/libraries/widgets/d3_sankey'),
+
+  server = function( input, output ) {
+
+   output$sankey <-  renderChart3({
+    sankeyPlot <- rCharts$new()
+    sankeyPlot$setLib("http://timelyportfolio.github.io/rCharts_d3_sankey")
+
+    sankeyPlot$set(
+      data = TeamSankey3(df = CallQual3, enquiry = "METERING"),
+      # nodeWidth = 15,
+      # nodePadding = 10,
+      # layout = 32,
+      # width = 500,
+      # height = 500
+      nodeWidth = 15,
+    nodePadding = 10,
+    layout = 32,
+    width = 750,
+    height = 500,
+    labelFormat = ".1%"
+    )
+
+    sankeyPlot$setTemplate( script =  "http://timelyportfolio.github.io/rCharts_d3_sankey/layouts/chart.html")
+
+    return(sankeyPlot)
+   })
+
+  }
+)
 
 ```
 
@@ -1284,7 +1488,7 @@ TopThree_ACTION <- paste(TopThree_ACTION[["ACTION"]], paste("(", TopThree_ACTION
 
 The graph show that the top three SRM types (in order of importance) raised for the enquiry type "Metering" were `r TopThree_ACTION[1:2]` and `r TopThree_ACTION[3]`. 
 
-```{r Action plot Metering, echo=FALSE}
+```{r Action plot Metering, eval=FALSE, include=FALSE}
 
 p4 <- ggplot(data = MeteringSRM_Action,
              aes(x = factor(1),
@@ -1307,7 +1511,43 @@ renderPlot({p4})
 
 ```
 
+```{r Metering Action plot Shiny, echo=FALSE}
 
+inputPanel(
+  selectInput("FYAction2", label = "Financial year:", choices = c("All", unique(MeteringSRM_Action$FY)), selected = "All"),
+  selectInput("XAction2", label = "xaxis:", choices = c(unique(MeteringSRM_Action$XAXIS), "NONE"), selected = "NONE")
+)
+
+renderPlot({
+  
+  value <- input$FYAction2
+  if(value == "All"){
+    
+    value <- unique(MeteringSRM_Action$FY)
+    
+  }
+  
+  value2 <- input$XAction2
+  
+  MeteringSRM_Action <- data.table(MeteringSRM_Action)
+  
+  # MeteringSRM_Action <- MeteringSRM_Action %>% filter(FY %in% value, XAXIS %in% value2)
+  if(value2 != "NONE") {
+    
+    ggplot(data=MeteringSRM_Action[FY %in% value & XAXIS %in% value2], aes(x = VALUE, y = Total, fill = reorder(ACTION, Total))) +
+      geom_bar(stat="Identity") +
+      labs(fill = "SR_CALL_METHOD") 
+  }
+  
+  else {
+    ggplot(data=MeteringSRM_Action[FY %in% value], aes(x = factor(1), y = Total, fill = reorder(ACTION, Total))) +
+      geom_bar(stat="Identity") +
+      labs(fill = "SR_CALL_METHOD") 
+  }
+  
+})
+
+```
 
 
 ##Trade Waste {.tabset .tabset-fade}
@@ -1320,7 +1560,7 @@ renderPlot({p4})
 # CallQual3[CallQual3$SRM == TRUE,]$SRM <- "SRM"
 # CallQual3[CallQual3$SRM == FALSE,]$SRM <- "RESOLVED"
 
-TradeWasteSRM_Action <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "TRADE WASTE"), .(ACC_TYPE, ACTION), summarise, Total = length(MEMO_CONSUMER)) %>%
+TradeWasteSRM_Action <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "TRADE WASTE"), .(FY, QUARTER, MONTH, ACC_TYPE, ACTION), summarise, Total = length(MEMO_CONSUMER)) %>%
                       arrange(-Total) #%>%
                       #mutate(cumulative = cumsum(Total)/sum(Total))# %>%
                       # filter(cumulative < 0.93)
@@ -1338,7 +1578,7 @@ TradeWasteSRM_Action_filter <- TradeWasteSRM_Action_filter %>%
 
 TradeWasteSRM_Action[!(TradeWasteSRM_Action$ACTION %in% TradeWasteSRM_Action_filter$ACTION), ]$ACTION <- "OTHER"
 
-TradeWasteSRM_Action <- aggregate(Total ~ ACC_TYPE + ACTION, TradeWasteSRM_Action, sum)
+TradeWasteSRM_Action <- aggregate(Total ~ FY + QUARTER + MONTH + ACC_TYPE + ACTION, TradeWasteSRM_Action, sum)
 
 TradeWasteSRM_Action <- TradeWasteSRM_Action %>%
                         arrange(-Total)
@@ -1347,9 +1587,12 @@ TradeWasteSRM_Action <- TradeWasteSRM_Action %>%
 
 ```
 
-These internal SRMs are raised against the trade waste account `r 100 * round(sum(TradeWasteSRM_Action[TradeWasteSRM_Action$ACC_TYPE == "TRADE_WASTE", 3])/sum(TradeWasteSRM_Action[,3]), 2)`% of the time followed by `r 100 * round(sum(TradeWasteSRM_Action[TradeWasteSRM_Action$ACC_TYPE == "TENANT", 3])/sum(TradeWasteSRM_Action[,3]), 2)`% against the tenant.   
+These internal SRMs are raised against the trade waste account `r 100 * round(sum(TradeWasteSRM_Action[TradeWasteSRM_Action$ACC_TYPE == "TRADE_WASTE", 6])/sum(TradeWasteSRM_Action[,6]), 2)`% of the time followed by `r 100 * round(sum(TradeWasteSRM_Action[TradeWasteSRM_Action$ACC_TYPE == "TENANT", 6])/sum(TradeWasteSRM_Action[,6]), 2)`% against the tenant.   
 
 ```{r TRADEWASTE SRM contact type, include=FALSE}
+
+TradeWasteSRM_Action <- TradeWasteSRM_Action %>%
+                       gather(XAXIS, VALUE, ACC_TYPE, QUARTER:MONTH)
 
 TradeWasteSRM_ConType <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "TRADE WASTE"), .(SR_CALL_METHOD), summarise, Total = length(MEMO_CONSUMER)) %>%
                       arrange(-Total) %>%
@@ -1365,11 +1608,18 @@ TopThree_ACTION <- TradeWasteSRM_ConType %>% filter(percent > 0, SR_CALL_METHOD 
 
 TopThree_ACTION <- paste(TopThree_ACTION[["SR_CALL_METHOD"]], paste("(", TopThree_ACTION[["percent"]], "%", ")", sep = ""))
 
+TradeWasteSRM_ConType <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "TRADE WASTE"), .(FY, QUARTER, MONTH, ACC_TYPE, SR_CALL_METHOD), summarise, Total = length(MEMO_CONSUMER)) 
+
+TradeWasteSRM_ConType <- aggregate(Total ~ FY + QUARTER + MONTH + ACC_TYPE + SR_CALL_METHOD, TradeWasteSRM_ConType, sum)
+
+TradeWasteSRM_ConType <- TradeWasteSRM_ConType %>%
+                       gather(XAXIS, VALUE, ACC_TYPE, MONTH:QUARTER)
+
 ```
 
 The graph below shows `r Internal`% of trade waste SRMs were generated internally with the majority of the remainder in response to `r TopThree_ACTION[1]` enquires. 
 
-```{r TRADEWASTE contact type plot, echo=FALSE}
+```{r TRADEWASTE contact type plot, eval=FALSE, include=FALSE}
 
 p6 <- ggplot(data = InternalSRM_ConType,
              aes(x = factor(1),
@@ -1391,6 +1641,49 @@ renderPlot({p6})
 
 ```
 
+```{r TRADEWASTE contact type plot Shiny, echo=FALSE}
+
+inputPanel(
+  selectInput("FYConType3", label = "Financial year:", choices = c("All", unique(TradeWasteSRM_ConType$FY)), selected = "All"),
+  selectInput("XConType3", label = "xaxis:", choices = c(unique(TradeWasteSRM_ConType$XAXIS), "NONE"), selected = "NONE")
+)
+
+renderPlot({
+  
+  value <- input$FYConType3
+  if(value == "All"){
+    
+    value <- unique(TradeWasteSRM_ConType$FY)
+    
+  }
+  
+  value2 <- input$XConType3
+  
+  TradeWasteSRM_ConType <- data.table(TradeWasteSRM_ConType)
+  
+  if(value2 != "NONE") {
+    
+    if(value2 == "MONTH") {
+      ggplot(data=TradeWasteSRM_ConType[FY %in% value & XAXIS %in% value2], aes(x = as.factor(as.yearmon(VALUE)), y = Total, fill = reorder(SR_CALL_METHOD, Total))) +
+        geom_bar(stat="Identity") +
+        labs(fill = "SR_CALL_METHOD")
+    }
+    else {
+      ggplot(data=TradeWasteSRM_ConType[FY %in% value & XAXIS %in% value2], aes(x = VALUE, y = Total, fill = reorder(SR_CALL_METHOD, Total))) +
+        geom_bar(stat="Identity") +
+        labs(fill = "SR_CALL_METHOD") 
+    }
+  }
+  
+  else {
+    ggplot(data=TradeWasteSRM_ConType[FY %in% value], aes(x = factor(1), y = Total, fill = reorder(SR_CALL_METHOD, Total))) +
+      geom_bar(stat="Identity") +
+      labs(fill = "SR_CALL_METHOD") 
+  }
+  
+})
+```
+
 ```{r TRADEWASTE SRM, include=FALSE}
 
 pathway <- Enquiries::TeamSankey2(df = CallQual3, enquiry = "TRADE WASTE", filename = "TradeWasteSRM_Teamflow")
@@ -1406,7 +1699,37 @@ The graph below shows that the most common pathways for Internal SRMs are:
 
 # Enquiries::TeamSankey(enquiry = "TRADE WASTE", filename = "TradeWasteSRM_Teamflow")
 
-htmltools::includeHTML("C:/Enquiries/vignettes/TradeWasteSRM_Teamflow.html")
+shinyApp(
+  ui = showOutput('sankey', 'C:/rCharts_d3_sankey/libraries/widgets/d3_sankey'),
+
+  server = function( input, output ) {
+
+   output$sankey <-  renderChart3({
+    sankeyPlot <- rCharts$new()
+    sankeyPlot$setLib("http://timelyportfolio.github.io/rCharts_d3_sankey")
+
+    sankeyPlot$set(
+      data = TeamSankey3(df = CallQual3, enquiry = "TRADE WASTE"),
+      # nodeWidth = 15,
+      # nodePadding = 10,
+      # layout = 32,
+      # width = 500,
+      # height = 500
+      nodeWidth = 15,
+    nodePadding = 10,
+    layout = 32,
+    width = 750,
+    height = 500,
+    labelFormat = ".1%"
+    )
+
+    sankeyPlot$setTemplate( script =  "http://timelyportfolio.github.io/rCharts_d3_sankey/layouts/chart.html")
+
+    return(sankeyPlot)
+   })
+
+  }
+)
 
 ```
 
@@ -1424,7 +1747,7 @@ TopThree_ACTION <- paste(TopThree_ACTION[["ACTION"]], paste("(", TopThree_ACTION
 
 The graph show that the top three SRM types (in order of importance) raised for the enquiry type "Trade waste" were `r TopThree_ACTION[1:2]` and `r TopThree_ACTION[3]`. 
 
-```{r Action plot Trade Waste, echo=FALSE}
+```{r Action plot Trade Waste, eval=FALSE, include=FALSE}
 
 p5 <- ggplot(data = TradeWasteSRM_Action,
              aes(x = factor(1),
@@ -1446,6 +1769,48 @@ p5 <- p5 + labs(fill='ENQUIRY')
 renderPlot({p5})
 
 ```
+
+```{r Trade Waste Action plot Shiny, echo=FALSE}
+
+
+inputPanel(
+  selectInput("FYAction3", label = "Financial year:", choices = c("All", unique(TradeWasteSRM_Action$FY)), selected = "All"),
+  selectInput("XAction3", label = "xaxis:", choices = c(unique(TradeWasteSRM_Action$XAXIS), "NONE"), selected = "NONE")
+)
+
+renderPlot({
+  
+  value <- input$FYAction3
+  if(value == "All"){
+    
+    value <- unique(TradeWasteSRM_Action$FY)
+    
+  }
+  
+  value2 <- input$XAction3
+  
+  TradeWasteSRM_Action <- data.table(TradeWasteSRM_Action)
+  
+  # TradeWasteSRM_Action <- TradeWasteSRM_Action %>% filter(FY %in% value, XAXIS %in% value2)
+  if(value2 != "NONE") {
+    
+    ggplot(data=TradeWasteSRM_Action[FY %in% value & XAXIS %in% value2], aes(x = VALUE, y = Total, fill = reorder(ACTION, Total))) +
+      geom_bar(stat="Identity") +
+      labs(fill = "SR_CALL_METHOD") 
+  }
+  
+  else {
+    ggplot(data=TradeWasteSRM_Action[FY %in% value], aes(x = factor(1), y = Total, fill = reorder(ACTION, Total))) +
+      geom_bar(stat="Identity") +
+      labs(fill = "SR_CALL_METHOD") 
+  }
+  
+})
+
+
+```
+
+
 
 
 The graph below shows over `r 2 + 2` percent of all customer enquiries between Jun 2014 and July 2016 were resolved at first point of contact. Approximately X percent of all customer enquiries were from residential type customers. 

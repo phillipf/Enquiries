@@ -1,5 +1,5 @@
 ---
-title: "Non-residential SRM analysis 2014-2016"
+title: "Customer Enquiries 2014-2016"
 author: "Phil Farrell"
 date: "22 December 2016"
 runtime: shiny
@@ -497,9 +497,12 @@ CallQual_Customer <- dbReadTable(con=conn,
 ```
 
 
-#Enquiries analysis {.tabset .tabset-fade}
 
-## High level summary
+#Non-residential SRM analysis 2014-2016 {.tabset .tabset-fade}
+
+##Enquiries analysis {.tabset .tabset-fade}
+
+### High level summary
 
 ```{r overall summary, message=FALSE, warning=FALSE, include=FALSE}
 
@@ -591,9 +594,10 @@ SRM_enquiry <- ddply(CallQual3 %>% filter(SRM == "SRM"), .(USES, ENQUIRY), summa
 SRM_enquiry_RES <- SRM_enquiry %>%
                    filter(USES == "RES") %>%
                    arrange(-Total) %>%
-                   mutate(CumulativePercent = cumsum(Total)/sum(Total)) %>%
+                   mutate(CumulativePercent = cumsum(Total)/sum(Total),
+                          Percent = 100 * Total/sum(Total)) %>%
                    filter(CumulativePercent < 0.99) %>%
-                   select(ENQUIRY, Total, CumulativePercent)
+                   select(ENQUIRY, Total, CumulativePercent, Percent)
 
 SRM_enquiry[SRM_enquiry$USES == "RES" & !(SRM_enquiry$ENQUIRY %in% SRM_enquiry_RES$ENQUIRY), ]$ENQUIRY <- "OTHER"
 
@@ -605,9 +609,10 @@ TopThree_RES <- SRM_enquiry_RES %>%
 SRM_enquiry_NRES <- SRM_enquiry%>%
                    filter(USES == "NONRES") %>%
                    arrange(-Total) %>%
-                   mutate(CumulativePercent = cumsum(Total)/sum(Total)) %>%
+                   mutate(CumulativePercent = cumsum(Total)/sum(Total),
+                          Percent = 100 * Total/sum(Total)) %>%
                    filter(CumulativePercent < 0.99) %>%
-                   select(ENQUIRY, Total, CumulativePercent)
+                   select(ENQUIRY, Total, CumulativePercent, Percent)
 
 SRM_enquiry[SRM_enquiry$USES == "NONRES" & !(SRM_enquiry$ENQUIRY %in% SRM_enquiry_NRES$ENQUIRY), ]$ENQUIRY <- "OTHER"
 
@@ -625,15 +630,11 @@ SRM_enquiry <- SRM_enquiry %>%
 
 ```
 
-## Enquiry types
+### Enquiry types
 
 The graph and tables below show that the top three enquiry types (in order of importance) ending up as SRMs were `r TopThree_NRES[1:2]` and `r TopThree_NRES[3]` for non-residential as well as `r TopThree_RES[1:2]` and `r TopThree_RES[3]` for residential customers.   
 
 ```{r Annual SRM plots, echo=FALSE, message=FALSE, warning=FALSE}
-
-# CallQual3$SRM <- ifelse(!is.na(CallQual3$SR_SERV_CODE), "SRM", "RESOLVED")   
-
-# x <- length(unique(CallQual3$MEMO_CONSUMER))
 
 SRM_enquiry$ENQUIRY <- factor(SRM_enquiry$ENQUIRY, levels = SRM_enquiry$ENQUIRY)
 
@@ -645,87 +646,31 @@ p1Annual <- ggplot(data = SRM_enquiry,
 
 p1Annual <- p1Annual + geom_bar(stat="identity")
 
-# p1Annual <- p1Annual + theme(axis.title.x=element_blank(),
-#         axis.text.x=element_blank(),
-#         axis.ticks.x=element_blank())
-
-#p1Annual <- p1Annual + facet_grid(facets=~FY)
-
 renderPlot({p1Annual}) 
 
-# p1Annual <- ggplot(data = EnquiryCountAnnual,
-#              aes(x = factor(USES),
-#                  fill= factor(ENQUIRY),
-#                  y = Total)) 
-# 
-# p1Annual <- p1Annual + geom_bar(stat="identity")
-# 
-# p1Annual
 
-# EnquiryCountAnnual <- CallQual3
-# 
-# EnquiryCountAnnual[!(EnquiryCountAnnual$ENQUIRY %in% Filter$ENQUIRY),]$ENQUIRY <- "OTHER"
-# 
-# EnquiryCountAnnual <- ddply(EnquiryCountAnnual, .(ENQUIRY, USES, SRM), summarise, Total = length(MEMO_CONSUMER)) %>%
-#                       arrange(-Total) %>%
-#                       select(USES,
-#                              SRM,
-#                              ENQUIRY,
-#                              Total)
-
-#Filter for SRM == TRUE
-
-# Filter <- ddply(CallQual3 %>% filter(SRM == "SRM"), .(ENQUIRY), summarise, Total = length(MEMO_CONSUMER)/x) %>%
-#                       arrange(-Total) %>%
-#                       mutate(cumulative = cumsum(Total)/sum(Total)) %>%
-#                       filter(cumulative < 0.93)
-# 
-# SRMCountAnnual <- CallQual3
-# 
-# SRMCountAnnual[!(SRMCountAnnual$ENQUIRY %in% Filter$ENQUIRY),]$ENQUIRY <- "OTHER"
-# 
-# SRMCountAnnual <- ddply(SRMCountAnnual %>% filter(SRM == "SRM"), .(USES, ENQUIRY), summarise, Total = length(MEMO_CONSUMER))  %>%
-#                       #mutate(Total = 100 * Total/sum(Total)) %>% 
-#                       arrange(USES, -Total)
-# 
-# p2Annual <- ggplot(data = SRMCountAnnual,
-#              aes(x = factor(USES),
-#                  fill= factor(ENQUIRY),
-#                  y = Total)) 
-# 
-# p2Annual <- p2Annual + geom_bar(stat="identity")
-
-#p2Annual <- p2Annual + scale_y_continuous(labels = percent)
-
-#p2Annual <- p2Annual + facet_grid(facets=~USES)
-
-# p2Annual
-
-#
-#p2Annual
-#selectInput("p2", "", c("", ""))
 ```
 
-## NON-RES Enquiry analysis
+### NON-RES Enquiry analysis
 
 ```{r xtable2, echo=FALSE, results="asis"}
       
-print(xtable(SRM_enquiry_NRES, align = "cccr",latex.environments="center", format.args = list(digits = 2, format = c("d","d","s","f"))), type = "html", include.rownames=FALSE)
+print(xtable(SRM_enquiry_NRES %>% select(-CumulativePercent), align = "cccr",latex.environments="center", format.args = list(digits = 2, format = c("d","d","s","f"))), type = "html", include.rownames=FALSE)
 
 #print(xtable(m), add.to.row=list(list(1),"\\rowcolor[gray]{.8} "))
 #print(xtable(SRM_enquiry_RES), type = "html")
 ```
 
-## RES Enquiry analysis
+### RES Enquiry analysis
 
 ```{r xtable3, echo=FALSE, results="asis"}
 
-print(xtable(SRM_enquiry_RES, align = "cccr",latex.environments="center", format.args = list(digits = 2, format = c("d","d","s","f"))), type = "html", include.rownames=FALSE)
+print(xtable(SRM_enquiry_RES %>% select(-CumulativePercent), align = "cccr",latex.environments="center", format.args = list(digits = 2, format = c("d","d","s","f"))), type = "html", include.rownames=FALSE)
 
 ```
 
 
-#Non-residential SRM analysis {.tabset .tabset-fade}
+##Non-residential SRM analysis {.tabset .tabset-fade}
 
 <!-- ##Non-res customer analysis -->
 
@@ -821,7 +766,7 @@ p2})
 
 ```
 
-##Non-res customer analysis
+###Non-res customer analysis
 
 ```{r, eval=FALSE, include=FALSE}
 shinyApp(
@@ -964,9 +909,9 @@ renderPlot({
 })
 ```
 
-##Internal SRMs {.tabset .tabset-fade}
+###Internal SRMs {.tabset .tabset-fade}
 
-### Summary 
+#### Summary 
 
 `r 100 * round(sum(SRM_enquiry_NRES[SRM_enquiry_NRES$ENQUIRY == "INTERNAL SRM", 2])/sum(SRM_enquiry_NRES[,2]), 2)`% of all non-residential SRMs are raised as Internal SRMs. 
 
@@ -1114,7 +1059,7 @@ pathway <- Enquiries::TeamSankey2(df = CallQual3, enquiry = "INTERNAL SRM", file
 
 ```
 
-### SRM flow
+#### SRM flow
 
 The graph below shows that the most common pathways for Internal SRMs are:
 * one `r pathway$Descr[1]`
@@ -1222,7 +1167,7 @@ TopThree_ACTION <- paste(TopThree_ACTION[["ACTION"]], paste("(", TopThree_ACTION
 
 ```
 
-### SRM types
+#### SRM types
 
 The graph show that the top three SRM types (in order of importance) raised for the enquiry type "Internal SRM" were `r TopThree_ACTION[1:2]` and `r TopThree_ACTION[3]`. 
 
@@ -1288,9 +1233,9 @@ renderPlot({
 ```
 
 
-##Metering {.tabset .tabset-fade}
+###Metering {.tabset .tabset-fade}
 
-### Summary
+#### Summary
 `r 100 * round(sum(SRM_enquiry_NRES[SRM_enquiry_NRES$ENQUIRY == "METERING", 2])/sum(SRM_enquiry_NRES[,2]), 2)`% of all non-residential SRMs are raised as Metering SRMs. 
 
 ```{r Metering and action, include=FALSE}
@@ -1430,7 +1375,7 @@ pathway <- Enquiries::TeamSankey2(df = CallQual3, enquiry = "METERING", filename
 
 ```
 
-### SRM flow
+#### SRM flow
 
 The graph below shows that the most common pathways for Internal SRMs are:
 * `r pathway$Descr[1]` 
@@ -1484,7 +1429,7 @@ TopThree_ACTION <- paste(TopThree_ACTION[["ACTION"]], paste("(", TopThree_ACTION
 
 ```
 
-### SRM types
+#### SRM types
 
 The graph show that the top three SRM types (in order of importance) raised for the enquiry type "Metering" were `r TopThree_ACTION[1:2]` and `r TopThree_ACTION[3]`. 
 
@@ -1550,9 +1495,9 @@ renderPlot({
 ```
 
 
-##Trade Waste {.tabset .tabset-fade}
+###Trade Waste {.tabset .tabset-fade}
 
-### Summary
+#### Summary
 `r 100 * round(sum(SRM_enquiry_NRES[SRM_enquiry_NRES$ENQUIRY == "TRADE WASTE", 2])/sum(SRM_enquiry_NRES[,2]), 2)`% of all non-residential SRMs are raised as Trade waste SRMs. 
 
 ```{r Trade Waste and action, include=FALSE}
@@ -1689,7 +1634,7 @@ renderPlot({
 pathway <- Enquiries::TeamSankey2(df = CallQual3, enquiry = "TRADE WASTE", filename = "TradeWasteSRM_Teamflow")
 
 ```
-### SRM flow
+#### SRM flow
 The graph below shows that the most common pathways for Internal SRMs are:
 * `r pathway$Descr[1]` 
 * `r pathway$Descr[2]`
@@ -1743,7 +1688,7 @@ TopThree_ACTION <- paste(TopThree_ACTION[["ACTION"]], paste("(", TopThree_ACTION
 
 ```
 
-### SRM types
+#### SRM types
 
 The graph show that the top three SRM types (in order of importance) raised for the enquiry type "Trade waste" were `r TopThree_ACTION[1:2]` and `r TopThree_ACTION[3]`. 
 
@@ -1810,11 +1755,6 @@ renderPlot({
 
 ```
 
-
-
-
-The graph below shows over `r 2 + 2` percent of all customer enquiries between Jun 2014 and July 2016 were resolved at first point of contact. Approximately X percent of all customer enquiries were from residential type customers. 
-
 ```{r Sankey graph, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
 
 sankeyPlot <- function(df, name){
@@ -1875,9 +1815,6 @@ htmltools::includeHTML("C:/Enquiries/data/Enduse_SRM.html")
 
 
 ```
-
-Over 40,000 enquiries between Jun 2014 and July 2016 
-
 
 ```{r Non-res SRM flow, eval = FALSE, echo=FALSE, message=FALSE, warning=FALSE}
 

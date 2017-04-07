@@ -7,8 +7,8 @@ output: html_document
 ---
 
 ```{r, include=FALSE}
-
-eval_cell = FALSE
+knitr::opts_chunk$set(error = TRUE)
+#FALSE = FALSE
 
 ```
 
@@ -21,7 +21,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 packages <- c("readr", "dplyr", "plyr", "tidyr", "ggplot2", "stringr", "lubridate", "sqldf", "randomNames", "data.table", "devtools", "scales", "knitr", "xtable", "stringi", "shiny", "zoo")
 
-# p <- installed.packages()
+p <- installed.packages()
 # 
 # ifelse(length(packages[!(packages %in% row.names(p))]) > 0,
 # install.packages(pkgs = packages[!(packages %in% row.names(p))], repos = "https://cran.ms.unimelb.edu.au/"), print("OK"))
@@ -40,15 +40,14 @@ lapply(packages, require, character.only = TRUE)
 
 ```
 
-```{r load, eval= eval_cell, message=FALSE, warning=FALSE, include=FALSE}
+```{r load, eval= FALSE, message=FALSE, warning=FALSE, include=FALSE}
 
 CallQual <- read_delim("N:/ABR/GENTRACK DATA/data AGAIN  for phil 22 nov.txt", 
                     delim = "|", quote = "") #quote = "" is important to avoid parsing failures
-colnames(CallQual)
 
 ```
 
-```{r organise memo information, eval= eval_cell, message=FALSE, warning=FALSE, include=FALSE}
+```{r organise memo information, eval= FALSE, message=FALSE, warning=FALSE, include=FALSE}
 
 filter <- !(as.numeric(row.names(CallQual)) %in% problems(CallQual)$row)
 
@@ -327,7 +326,7 @@ CallQual3[ , cols] <- apply(CallQual3[ , cols], 2, toupper)
 
 ```
 
-```{r Date time, message=FALSE, eval= eval_cell, warning=FALSE, include=FALSE}
+```{r Date time, message=FALSE, eval= FALSE, warning=FALSE, include=FALSE}
 
 CallQual3 <- CallQual3 %>%
                     mutate(SRM = ifelse(!is.na(SR_SERV_CODE), TRUE, FALSE),
@@ -338,7 +337,7 @@ CallQual3 <- CallQual3 %>%
 
 ```
 
-```{r Key Accounts, eval= eval_cell, message=FALSE, warning=FALSE, include=FALSE}
+```{r Key Accounts, eval= FALSE, message=FALSE, warning=FALSE, include=FALSE}
 PropertyLayer <- read.csv("file:///N:/KarlBlackhall/Gentrack AL/PROPERTY_LAYER_1516FY (Q1-Q4).csv",
                           stringsAsFactors = FALSE) %>%
                  mutate(ACC_NAME = gsub("[[:space:]]|[^[:alnum:]]", "", ACCOUNT_NAME))
@@ -367,7 +366,7 @@ CallQual3[!(as.numeric(substr(CallQual3$MEMO_CONSUMER, 3, 9)) %in% KeyAccountsID
 
 ```
 
-```{r Gentrack Acc type, eval= eval_cell, message=FALSE, warning=FALSE, include=FALSE}
+```{r Gentrack Acc type, eval= FALSE, message=FALSE, warning=FALSE, include=FALSE}
 
 CallQual3$ACC_TYPE <- "TENANT"
 
@@ -399,7 +398,7 @@ getData()
 
 ```
 
-```{r Gentrack Users, eval= eval_cell, include=FALSE}
+```{r Gentrack Users, eval= FALSE, include=FALSE}
 
 Users <- read.csv("file:///N:/ABR/Output_2_RootCauseSRMandRepeats/SRSSreports/GentrackUsers.csv",
                   stringsAsFactors = FALSE) %>%
@@ -414,13 +413,13 @@ colnames(CallQual3)[colnames(CallQual3) == "ï..DEPARTMENT.y"] <- "END"
 
 ```
 
-```{r SRM, eval= eval_cell, include=FALSE}
+```{r SRM, eval= FALSE, include=FALSE}
 
 CallQual3$SRM <- ifelse(!is.na(CallQual3$SR_SERV_CODE), "SRM", "RESOLVED")   
 
 ```
 
-```{r Split into Customer and Memo tables, eval= eval_cell, include=FALSE}
+```{r Split into Customer and Memo tables, eval= FALSE, include=FALSE}
 
 Customer <- CallQual3 %>%
             dplyr::select(1:6, USES, KEY_ACCOUNT, CUS_BIRTHDATE)
@@ -430,7 +429,7 @@ CallQual4 <- CallQual3 %>%
 
 ```
 
-```{r PostgreSQL connect, message=FALSE, warning=FALSE, include=FALSE}
+```{r PostgreSQL connect, message=FALSE, eval= FALSE, warning=FALSE, include=FALSE}
 
 PostgreSQLconnect <- function(dbname = "ABRdb", type = 1, user = NULL, host = NULL) {
 
@@ -439,7 +438,7 @@ PostgreSQLconnect <- function(dbname = "ABRdb", type = 1, user = NULL, host = NU
     install.packages("RPostgreSQL", repos = "https://cran.ms.unimelb.edu.au/")
   }
 
-  system("C:/bin/pgsql/run.bat")
+  system("C:/Users/farrelp1/Documents/bin/pgsql/run.bat")
 
   Sys.sleep(3)
 
@@ -471,7 +470,7 @@ conn <- PostgreSQLconnect()
 
 ```
 
-```{r Write CAllQual3 to PGSQL, eval= eval_cell, message=FALSE, warning=FALSE, include=FALSE}
+```{r Write CAllQual3 to PGSQL, eval= FALSE, message=FALSE, warning=FALSE, include=FALSE}
 
 dbRemoveTable(conn, "CallQual_Memo")
 
@@ -491,7 +490,7 @@ dbWriteTable(con=conn,
 
 ```
 
-```{r Read in CallQual3, include=FALSE}
+```{r Read in CallQual3, eval= FALSE, include=FALSE}
 
 CallQual3 <- dbReadTable(con=conn,
                          name="CallQual_Memo")
@@ -500,6 +499,93 @@ CallQual_Customer <- dbReadTable(con=conn,
                          name="CallQual_Customer")
 ```
 
+```{r Read in CallQual3v2, include=FALSE}
+
+CallQual3 <- read.csv("file:///N:/ABR/Output_2_RootCauseSRMandRepeats/Shiny/data/CallQual3.csv",
+                      stringsAsFactors = FALSE)
+```
+
+```{r Date timev2, message=FALSE, warning=FALSE, include=FALSE}
+
+CallQual3 <- CallQual3 %>%
+                    mutate(SRM = ifelse(!is.na(CallQual3$SR_SERV_CODE), "SRM", "RESOLVED"),
+                    MEMO_DATETIME = parse_date_time(MEMO_DATETIME, orders="%y-%m-%d %H:%M:%S"),
+                    SR_DATETIME = parse_date_time(SR_DATETIME, orders="%y-%m-%d %H:%M:%S"),
+                    STAT_DATE = dmy(format(STAT_DATE, format="%d/%m/%y")))
+
+```
+
+```{r Call Method,message=FALSE, warning=FALSE, include=FALSE}
+
+Call_method <- function(x) {
+  
+  if(is.na(x)) {
+    
+    return(NA)
+    
+  }
+  
+  else if(x == "P") {
+    
+    return("phone")
+    
+  }
+  
+  else if(x == "V") {
+    
+    return("visit")
+    
+  }
+  
+  else if(x == "E") {
+    
+    return("email")
+    
+  }
+  
+  else if(x == "M") {
+    
+    return("mail")
+    
+  }
+  
+  else if(x == "F") {
+    
+    return("fax")
+    
+  }
+  
+  else if(x == "I") {
+    
+    return("internal")
+    
+  }
+  
+  else if(x == "T") {
+    
+    return("internet")
+    
+  }
+  
+  else if(x == "WOM") {
+    
+    return("word of mouth")
+    
+  }
+  
+  else {
+    
+    return(x)
+  }
+  
+}
+
+Call_method <- Vectorize(Call_method)
+
+CallQual3 <- CallQual3 %>%
+                    mutate(SR_CALL_METHOD = Call_method(SR_CALL_METHOD))
+
+```
 
 
 #Non-residential SRM analysis 2014-2016 {.tabset .tabset-fade}
@@ -557,6 +643,10 @@ FYSRMSummary <- ddply(CallQual3, .(FY, USES, SRM), summarise, Total = length(MEM
              # mutate(TotalEnquiries = NONRES + RES)
                 arrange(FY, USES, -Total)
 
+FYSummary <- ggplot(data = FYSRMSummary %>% arrange(-Total) %>% group_by(USES, SRM) %>% dplyr::summarise(Total = sum(Total)) %>% ungroup(),
+             aes(x = USES,
+                 fill = reorder(SRM, Total),
+                 y = Total)) + geom_bar(stat="identity") + scale_y_continuous(labels = comma) + labs(fill='SRM') + xlab("Customer type") + ylab("Total enquiries") + theme(text = element_text(size=25))
 
 ```
 
@@ -634,21 +724,421 @@ SRM_enquiry <- SRM_enquiry %>%
 
 ```
 
+```{r SRM origin graph, include=TRUE}
+
+SRM_enquiry <- CallQual3 %>%
+               group_by(USES, SOTDESCRIPTION, SR_CALL_METHOD, SRM) %>%
+               dplyr::summarise(
+                     count = n()) %>%
+               spread(SRM, count) %>%
+               mutate(rate = ifelse(USES == "NONRES", NONRES_rate, RES_rate)) %>%
+               ungroup %>%
+               group_by(USES, SOTDESCRIPTION, SR_CALL_METHOD) %>%
+               dplyr::summarise(perc = (SRM/ rate)) %>%
+               ungroup()
+
+SRM_enquiry_RES <- SRM_enquiry %>%
+                   filter(USES == "RES") %>%
+                   arrange(-perc) %>%
+                   mutate(CumulativePercent = cumsum(perc)/sum(perc, na.rm = TRUE),
+                          Percent = 100 * perc/sum(perc, na.rm = TRUE)) %>%
+                   filter(CumulativePercent < 0.80) %>%
+                   dplyr::select(SOTDESCRIPTION, SR_CALL_METHOD, perc, CumulativePercent, Percent)
+
+SRM_enquiry[SRM_enquiry$USES == "RES" & !(SRM_enquiry$SOTDESCRIPTION %in% SRM_enquiry_RES$SOTDESCRIPTION), ]$SOTDESCRIPTION <- "OTHER"
+
+
+SRM_enquiry_NRES <- SRM_enquiry%>%
+                   filter(USES == "NONRES") %>%
+                   arrange(-perc) %>%
+                   mutate(CumulativePercent = cumsum(perc)/sum(perc, na.rm = TRUE),
+                          Percent = 100 * perc/sum(perc, na.rm = TRUE)) %>%
+                   filter(CumulativePercent < 0.80) %>%
+                   dplyr::select(SOTDESCRIPTION, SR_CALL_METHOD, perc, CumulativePercent, Percent)
+
+SRM_enquiry[SRM_enquiry$USES == "NONRES" & !(SRM_enquiry$SOTDESCRIPTION %in% SRM_enquiry_NRES$SOTDESCRIPTION), ]$SOTDESCRIPTION <- "OTHER"
+
+SRM_enquiry$SOTDESCRIPTION <- factor(SRM_enquiry$SOTDESCRIPTION, levels = SRM_enquiry$SOTDESCRIPTION)
+
+SRM_enquiry <- aggregate(Total ~ SOTDESCRIPTION + SR_CALL_METHOD + MONTH + QUARTER + FY, SRM_NRES_type, sum)
+
+p1Annual <- ggplot(data = SRM_enquiry,
+                  aes(x = USES, 
+                  y = perc,
+                  fill = reorder(SR_CALL_METHOD, perc)))
+
+#p1Annual <- p1Annual + geom_bar(stat="identity") 
+
+p1Annual <- p1Annual + geom_bar(stat="identity") + scale_y_continuous(labels=percent) + 
+            labs(fill = "ENQUIRY") + 
+            ylab("Percentage") +
+            theme(text = element_text(size=25),
+                  axis.text.x = element_text(hjust=1),
+                  #legend.position="botto
+            )
+
+#CallQual3 %>% filter(!is.na(SR_CALL_METHOD)) %>% group_by(USES, SR_CALL_METHOD) %>% dplyr::count()
+
+```
+
+```{r SRM type by origin graph, include=TRUE}
+
+SRM_enquiry <- CallQual3 %>%
+               group_by(USES, SOTDESCRIPTION, SR_CALL_METHOD, SRM) %>%
+               dplyr::summarise(
+                     count = n()) %>%
+               spread(SRM, count) %>%
+               mutate(rate = ifelse(USES == "NONRES", NONRES_rate, RES_rate)) %>%
+               ungroup %>%
+               group_by(USES, SOTDESCRIPTION, SR_CALL_METHOD) %>%
+               dplyr::summarise(perc = (SRM/ rate)) %>%
+               ungroup()
+
+SRM_enquiry_RES <- SRM_enquiry %>%
+                   filter(USES == "RES") %>%
+                   arrange(-perc) %>%
+                   mutate(CumulativePercent = cumsum(perc)/sum(perc, na.rm = TRUE),
+                          Percent = 100 * perc/sum(perc, na.rm = TRUE)) %>%
+                   filter(CumulativePercent < 0.80) %>%
+                   dplyr::select(SOTDESCRIPTION, SR_CALL_METHOD, perc, CumulativePercent, Percent)
+
+SRM_enquiry[SRM_enquiry$USES == "RES" & !(SRM_enquiry$SOTDESCRIPTION %in% SRM_enquiry_RES$SOTDESCRIPTION), ]$SOTDESCRIPTION <- "OTHER"
+
+
+SRM_enquiry_NRES <- SRM_enquiry%>%
+                   filter(USES == "NONRES") %>%
+                   arrange(-perc) %>%
+                   mutate(CumulativePercent = cumsum(perc)/sum(perc, na.rm = TRUE),
+                          Percent = 100 * perc/sum(perc, na.rm = TRUE)) %>%
+                   filter(CumulativePercent < 0.80) %>%
+                   dplyr::select(SOTDESCRIPTION, SR_CALL_METHOD, perc, CumulativePercent, Percent)
+
+SRM_enquiry[SRM_enquiry$USES == "NONRES" & !(SRM_enquiry$SOTDESCRIPTION %in% SRM_enquiry_NRES$SOTDESCRIPTION), ]$SOTDESCRIPTION <- "OTHER"
+
+SRM_enquiry$SOTDESCRIPTION <- factor(SRM_enquiry$SOTDESCRIPTION, levels = SRM_enquiry$SOTDESCRIPTION)
+
+SRM_enquiry <- SRM_enquiry %>% filter(USES == "NONRES", !is.na(SR_CALL_METHOD), SR_CALL_METHOD != "fax", SR_CALL_METHOD != "mail")
+
+SRM_enquiry <- aggregate(Total ~ SOTDESCRIPTION + SR_CALL_METHOD + MONTH + QUARTER + FY, SRM_NRES_type, sum)
+
+p1Annual <- ggplot(data = SRM_enquiry,
+                  aes(x = reorder(SR_CALL_METHOD, -perc), 
+                  y = perc,
+                  fill = reorder(SOTDESCRIPTION, perc)))
+
+#p1Annual <- p1Annual + geom_bar(stat="identity") 
+
+p1Annual <- p1Annual + geom_bar(stat="identity") + scale_y_continuous(labels=percent) + 
+            labs(fill = "ENQUIRY") + 
+            ylab("Percentage") + xlab("SRM origin") +
+            theme(text = element_text(size=25),
+                  axis.text.x = element_text(hjust=1),
+                  #legend.position="botto
+            )
+
+```
+
+```{r recheck reads high-low by success, include=FALSE, eval = TRUE}
+
+# x <- c("imageUploaded,people.jpg,more,comma,separated,stuff", "imageUploaded", "people.jpg")
+# grepl("(?=.*imageUploaded)(?=.*people\\.jpg)", x, perl = TRUE)
+
+Total <- CallQual3 %>% 
+  filter(ENQUIRY == "INTERNAL SRM", ACTION == "RECHEK READ") %>%
+  group_by(FY, USES) %>%
+  dplyr::summarise(n())
+
+Success <- CallQual3 %>% 
+  filter(ENQUIRY == "INTERNAL SRM", ACTION == "RECHEK READ") %>%
+  mutate(READ_TYPE = ifelse(grepl(".*HIGH READ.*", REPLACE.SR_REMARKS.CHR.63485USINGNCHAR_CS.....), "HIGH", "LOW")) %>%
+  #mutate(CONFIRMED = grepl(".*CONFIRMED.*", REPLACE.SR_REMARKS.CHR.63485USINGNCHAR_CS.....)) %>%
+  mutate(CONFIRMED_INCORRECT = grepl("(?=.*CONFIRMED)(?=.*INCORRECT)", REPLACE.SR_REMARKS.CHR.63485USINGNCHAR_CS....., perl = TRUE)) %>%
+  group_by(USES, READ_TYPE, FY) %>%
+  dplyr::summarise(Index = sum(CONFIRMED_INCORRECT=="TRUE")/ sum(CONFIRMED_INCORRECT=="FALSE")) %>%
+  ungroup() %>%
+  spread(READ_TYPE, Index)
+
+test <- CallQual3 %>% 
+  filter(ENQUIRY == "INTERNAL SRM", ACTION == "RECHEK READ") %>%
+  mutate(READ_TYPE = ifelse(grepl(".*HIGH READ.*", REPLACE.SR_REMARKS.CHR.63485USINGNCHAR_CS.....), "HIGH", "LOW")) %>%
+  #mutate(CONFIRMED = grepl(".*CONFIRMED.*", REPLACE.SR_REMARKS.CHR.63485USINGNCHAR_CS.....)) %>%
+  mutate(CONFIRMED_INCORRECT = grepl("(?=.*CONFIRMED)(?=.*INCORRECT)", REPLACE.SR_REMARKS.CHR.63485USINGNCHAR_CS....., perl = TRUE)) %>%
+  group_by(CONFIRMED_INCORRECT, USES, READ_TYPE, FY) %>%
+  dplyr::summarise(Total = n())%>%
+  ungroup() %>%
+  spread(READ_TYPE, Total) 
+
+identical(Success[Success$USES == "NONRES" & Success$FY == 2015,]$HIGH, 
+          test[test$USES == "NONRES" & test$FY == 2015 & test$CONFIRMED_INCORRECT == TRUE,]$HIGH/test[test$USES == "NONRES" & test$FY == 2015 & test$CONFIRMED_INCORRECT == FALSE,]$HIGH)
+
+
+
+p1Annual <- ggplot(data = Success ,
+                  aes(x = reorder(READ_TYPE, -Index), 
+                  y = Index,
+                  fill = READ_TYPE
+                  ))
+
+#p1Annual <- p1Annual + geom_bar(stat="identity") 
+
+p1Annual <- p1Annual + geom_bar(stat="identity") + scale_y_continuous(labels=percent) + 
+            guides(fill=FALSE) + 
+            ylab("success percentage") + xlab("Read type") +
+            theme(text = element_text(size=25),
+                  axis.text.x = element_text(hjust=1),
+                  #legend.position="botto
+            )
+
+p1Annual <- p1Annual + facet_grid(facets=~FY + USES)
+
+```
+
+```{r Trade waste, include=FALSE, eval = TRUE}
+
+Notes <- CallQual3 %>% filter(USES == "NONRES", SR_CALL_METHOD == "visit") %>% .[["REPLACE.SR_REMARKS.CHR.63485USINGNCHAR_CS....."]]
+
+StartDate <- CallQual3 %>% filter(USES == "NONRES", SR_CALL_METHOD == "visit") %>% .[["SR_DATETIME"]]
+
+EndDate <- CallQual3 %>% filter(USES == "NONRES", SR_CALL_METHOD == "visit") %>% .[["STAT_DATE"]]
+
+split <- str_split(Notes, "\\s[\\**]")
+
+split <- lapply(split, function(x) x[grepl("[A-Z]", x)])
+
+names(split) <- CallQual3 %>% filter(USES == "NONRES", SR_CALL_METHOD == "visit") %>% .[["SRM_ID"]]
+
+pattern <- "[0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4}"
+
+dates <- lapply(split, function(x) x[grepl(pattern, x)])
+
+df <- data.frame(SRM_ID = rep(names(dates), sapply(dates, length)),
+                 NOTES = unlist(dates), stringsAsFactors = FALSE) %>%
+      mutate(SRM_ID = as.integer(SRM_ID),
+             ACCOUNT_CLOSED = sub(".*(ACCT CLSED|ACCT CLOSED) ([0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4}).*", "\\2", NOTES),
+             DATE = ifelse(grepl("ACCT CLSED|ACCT CLOSED", NOTES),
+                           sub(".*(ACCT CLSED|ACCT CLOSED) ([0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4}).*([0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4})", "\\3", NOTES),
+                           sub(".*([0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4}).*", "\\1", NOTES))) 
+
+df[grepl("[A-Z]", df$ACCOUNT_CLOSED), 3] <- NA
+
+df[!grepl("[A-Z]", df$ACCOUNT_CLOSED), 2] <- gsub(".*(ACCT CLSED|ACCT CLOSED) ([0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4})(.*)", "\\3", df[!grepl("[A-Z]", df$ACCOUNT_CLOSED), 2])
+
+df$ACCOUNT_CLOSED <- dmy(df$ACCOUNT_CLOSED)
+
+df[grepl("[A-Z]", df$DATE), 4] <- NA
+
+df$DATE <- dmy(df$DATE)
+
+df <- df %>% 
+      left_join(select(CallQual3, SRM_ID, STAT_DATE))
+```
+
+```{r recheck reads NOTES, include=FALSE, eval = TRUE}
+Notes <- CallQual3 %>% filter(USES == "NONRES", ACTION == "RECHEK READ") %>% .[["REPLACE.SR_REMARKS.CHR.63485USINGNCHAR_CS....."]]
+
+StartDate <- CallQual3 %>% filter(USES == "NONRES", ACTION == "RECHEK READ") %>% .[["SR_DATETIME"]]
+
+EndDate <- CallQual3 %>% filter(USES == "NONRES", ACTION == "RECHEK READ") %>% .[["STAT_DATE"]]
+
+split <- str_split(Notes, "[\\**]")
+
+split <- lapply(split, function(x) x[grepl("[A-Z]", x)])
+
+names(split) <- CallQual3 %>% filter(USES == "NONRES", ACTION == "RECHEK READ") %>% .[["SRM_ID"]]
+
+pattern <- "[0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4}"
+
+dates <- lapply(split, function(x) x[grepl(pattern, x)])
+
+df <- data.frame(SRM_ID = rep(names(split), sapply(split, length)),
+                 NOTES = unlist(split), stringsAsFactors = FALSE) %>%
+      mutate(SRM_ID = as.integer(SRM_ID),
+             NOTES = str_trim(NOTES)) %>% 
+      distinct()
+
+id <- which(grepl("^[A-Z]* [0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4}[\\s]*[A-Z]*[\\s]*$|^[A-Z]* [0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4} [A-Z]*[\\s]*$", df$NOTES))
+
+dates <- unlist(str_extract_all(df$NOTES[id], pattern))
+
+df$date <- NA
+
+lapply(id, function(x) df$date[id - 1] <<- dates[which(id == x)])
+
+df <- df %>%
+      filter(!grepl("^[A-Z]* [0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4}[\\s]*[A-Z]*[\\s]*$|^[A-Z]* [0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4} [A-Z]*[\\s]*$", NOTES))
+
+df$READ_TYPE <- NA
+
+df$READ_TYPE[grepl("LOW READ", df$NOTES)] <- "LOW"
+
+df$READ_TYPE[grepl("LOCKED|NO ANSWER|UNABLE TO ACCESS|LEFT MESSAGE", df$NOTES)] <- "LOCKED/NO ACCESS"
+
+df$READ_TYPE[grepl("HIGH LETTER", df$NOTES)] <- "HIGH LETTER"
+
+df$READ_TYPE[grepl("CYBLE NOT REGISTERING", df$NOTES)] <- "CYBLE NOT REGISTERING"
+
+df$READ_TYPE[grepl("RE-CALIBRATED", df$NOTES)] <- "RE-CALIBRATED METER"
+
+df$READ_TYPE[grepl("GATIC", df$NOTES)] <- "GATIC"
+
+df$READ_TYPE[grepl("UNABLE TO LOCATE", df$NOTES)] <- "UNABLE TO LOCATE"
+
+df$READ_TYPE[grepl("UNABLE TO READ| BAD DIAL", df$NOTES)] <- "UNABLE TO READ"
+
+df$READ_TYPE[grepl("HIGH READ|HIG READ", df$NOTES)] <- "HIGH"
+
+df$READ_TYPE[grepl("BACKWARDS|REVERSE USAGE", df$NOTES)] <- "BACKWARDS"
+
+df$READ_TYPE[grepl("MISSING METER|MISSING METER|METER REMOVED", df$NOTES)] <- "MISSING METER" 
+
+df$READ_TYPE[grepl(".*SS [0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4} [A-Z|0-9]* R.*", df$NOTES)] <- "SS METER READ"
+
+df$READ_TYPE[grepl("BILLED", df$NOTES)] <- "BILLED"
+
+df$RESULT <- NA
+
+df$RESULT[grepl("RECHECK CONFIRMED|METER IS WORKING|METER IS CORRECT|READ WAS CORRECT", df$NOTES)] <- "READ_CORRECT"
+
+df$RESULT[grepl("READ INCORRECT", df$NOTES)] <- "READ_INCORRECT"
+
+df$SS <- "CWW"
+
+df$SS[grepl("^SS.*", df$NOTES)] <- "SS"
+
+             
+df <- df %>% 
+      left_join(select(CallQual3, SRM_ID, SR_DATETIME, MEMO_DATETIME, STAT_DATE, ACC_TYPE)) %>% 
+      mutate(SR_DATETIME = as.Date(SR_DATETIME, format="%Y-%m-%d %H:%M:%S UTC"),
+             MEMO_DATETIME = as.Date(MEMO_DATETIME, format="%Y-%m-%d %H:%M:%S UTC")) %>%
+      distinct() 
+
+# pattern <- "[0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4}.*$|[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{1,4}.*$"
+# pattern2 <- "(.*)([0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4})(.*)$|(.*)([0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,4})(.*)$"
+# 
+# df$date[grepl(pattern, df$NOTES)] <- gsub(pattern2, "\\2", df$NOTES[grepl(pattern, df$NOTES)])
+# 
+# pattern <- "(S|SS) [0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4}.*|(S|SS) [0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{1,4}.*"
+# pattern2 <- "(S|SS) ([0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4}).*|(S|SS) ([0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{1,4}).*"
+# 
+# df$date[grepl(pattern, df$NOTES)] <- gsub(pattern2, "\\2", df$NOTES[grepl(pattern, df$NOTES)])
+
+p <- "[0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4}|[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{1,4}"
+
+df$date <- str_extract_all(df$NOTES, p)
+
+df$date[unlist(lapply(df$date, function(x) length(x) == 0))] <- NA
+
+df <- df %>%
+      mutate(date = sapply(date, function(x) dmy(unique(x)))) #%>%
+      #mutate(date = sapply(date, function(x) dmy(x)))
+
+
+
+#df$date <- sapply(seq_along(df$date), function(i) ifelse(length(unlist(df$date[i])) == 0, NA, unlist(df$date[i])))
+
+#df$date <- dmy(df$NOTES)
+
+#df[!is.na(df$ACCOUNT_CLOSED), 3] <- dmy(df[!is.na(df$ACCOUNT_CLOSED), 3])
+
+#dates <- lapply(seq_along(dates), function(i) gsub(".*([0-9]{1,2}/[0-9]{1,2}/[0-9]{1,4}).*", "", dates[[i]]))
+
+dates <- lapply(seq_along(dates), function(i) str_extract_all(dates[[i]], pattern))
+
+#dates <- rapply(dates, function(i) str_extract_all(i, pattern))
+
+#dates <- str_extract_all(dates, pattern)
+
+#df <- data.frame(matrix(unlist(dates), nrow=length(dates), byrow=T))
+
+#dates <- lapply(seq_along(dates), function(i) lapply(dates[[i]], function(x) dmy(x)))
+
+dates <- sapply(seq_along(dates), function(i) lapply(dates[[i]], function(x) dmy(x)))
+
+dates <- sapply(seq_along(dates), function(i) lapply(dates[[i]], function(x) x[x > StartDate[i]]))
+
+dates <- sapply(seq_along(dates), function(i) dates[[i]][length(dates[[i]]) != 0] <- NA))
+
+#split <- lapply(seq_along(dates), function(i) lapply(dates[[i]], function(x) x[x > StartDate[i]]))
+
+names(dates) <- CallQual3 %>% filter(USES == "NONRES", SR_CALL_METHOD == "visit") %>% .[["SRM_ID"]]
+
+df <- data.frame()
+
+for(i in seq_along(dates)) {
+  
+  id <- names(dates[i])
+  
+  for(x in seq_along(dates[[i]])) {
+    
+    df$id[i:length(dates[[i]])] <- rep(id, length(dates[[i]]))
+    df$date <- x
+    
+  }
+  
+}
+```
+
+
 ### Enquiry types
 
 The graph and tables below show that the top three enquiry types (in order of importance) ending up as SRMs were `r TopThree_NRES[1:2]` and `r TopThree_NRES[3]` for non-residential as well as `r TopThree_RES[1:2]` and `r TopThree_RES[3]` for residential customers.   
 
 ```{r Annual SRM plots, echo=FALSE, message=FALSE, warning=FALSE}
 
+NONRES_rate <- sum(FYSRMSummary[FYSRMSummary$USES == "NONRES", 4])
+
+RES_rate <- sum(FYSRMSummary[FYSRMSummary$USES == "RES", 4])
+
+SRM_enquiry <- CallQual3 %>%
+               group_by(USES, ENQUIRY, SRM) %>%
+               dplyr::summarise(
+                     count = n()) %>%
+               spread(SRM, count) %>%
+               mutate(rate = ifelse(USES == "NONRES", NONRES_rate, RES_rate)) %>%
+               ungroup %>%
+               group_by(USES, ENQUIRY) %>%
+               dplyr::summarise(perc = (SRM/ rate)) %>%
+               ungroup()
+
+SRM_enquiry_RES <- SRM_enquiry %>%
+                   filter(USES == "RES") %>%
+                   arrange(-perc) %>%
+                   mutate(CumulativePercent = cumsum(perc)/sum(perc, na.rm = TRUE),
+                          Percent = 100 * perc/sum(perc, na.rm = TRUE)) %>%
+                   filter(CumulativePercent < 0.99) %>%
+                   dplyr::select(ENQUIRY, perc, CumulativePercent, Percent)
+
+SRM_enquiry[SRM_enquiry$USES == "RES" & !(SRM_enquiry$ENQUIRY %in% SRM_enquiry_RES$ENQUIRY), ]$ENQUIRY <- "OTHER"
+
+
+SRM_enquiry_NRES <- SRM_enquiry%>%
+                   filter(USES == "NONRES") %>%
+                   arrange(-perc) %>%
+                   mutate(CumulativePercent = cumsum(perc)/sum(perc, na.rm = TRUE),
+                          Percent = 100 * perc/sum(perc, na.rm = TRUE)) %>%
+                   filter(CumulativePercent < 0.99) %>%
+                   dplyr::select(ENQUIRY, perc, CumulativePercent, Percent)
+
+SRM_enquiry[SRM_enquiry$USES == "NONRES" & !(SRM_enquiry$ENQUIRY %in% SRM_enquiry_NRES$ENQUIRY), ]$ENQUIRY <- "OTHER"
+
 SRM_enquiry$ENQUIRY <- factor(SRM_enquiry$ENQUIRY, levels = SRM_enquiry$ENQUIRY)
 
-p1Annual <- ggplot(data = SRM_enquiry,
-             aes(x = USES,
-                 y = Total,
-                 fill= reorder(ENQUIRY, Total)
-                 )) 
+SRM_enquiry <- aggregate(Total ~ ACC_TYPE + ENQUIRY + MONTH + QUARTER + FY, SRM_NRES_type, sum)
 
-p1Annual <- p1Annual + geom_bar(stat="identity")
+p1Annual <- ggplot(data = SRM_enquiry,
+                  aes(x = USES, 
+                  y = perc,
+                  fill = reorder(ENQUIRY, perc)))
+
+#p1Annual <- p1Annual + geom_bar(stat="identity") 
+
+p1Annual <- p1Annual + geom_bar(stat="identity") + scale_y_continuous(labels=percent) + 
+            labs(fill = "ENQUIRY") + 
+            ylab("Percentage") +
+            theme(text = element_text(size=25),
+                  axis.text.x = element_text(hjust=1),
+                  #legend.position="bottom"
+                  )
 
 renderPlot({p1Annual}) 
 
@@ -714,7 +1204,7 @@ CallQual3$MONTH <- format(CallQual3$MEMO_DATETIME, "%Y-%m")
 
 CallQual3$QUARTER <- getYearQuarter(CallQual3$MEMO_DATETIME)
 
-SRM_NRES_type <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES"), .(ACC_TYPE, ENQUIRY, MONTH, QUARTER, FY), summarise, Total = length(MEMO_CONSUMER)) %>%
+SRM_NRES_type <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES"), .(ACC_TYPE, ENQUIRY, MONTH, QUARTER, FY, SR_CALL_METHOD), summarise, Total = length(MEMO_CONSUMER)) %>%
                       arrange(-Total)
 
 # SRM_NRES_type <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES"), .(ACC_TYPE, ENQUIRY, FY), summarise, Total = length(MEMO_CONSUMER)) %>%
@@ -735,7 +1225,7 @@ SRM_NRES_type_filter <- SRM_NRES_type_filter %>%
 
 SRM_NRES_type[!(SRM_NRES_type$ENQUIRY %in% SRM_NRES_type_filter$ENQUIRY), ]$ENQUIRY <- "OTHER"
 
-SRM_NRES_type <- aggregate(Total ~ ACC_TYPE + ENQUIRY + MONTH + QUARTER + FY, SRM_NRES_type, sum)
+SRM_NRES_type <- aggregate(Total ~ ACC_TYPE + ENQUIRY + MONTH + QUARTER + FY + SR_CALL_METHOD, SRM_NRES_type, sum)
 
 SRM_NRES_type <- SRM_NRES_type %>%
                  arrange(Total)
@@ -743,7 +1233,7 @@ SRM_NRES_type <- SRM_NRES_type %>%
 SRM_NRES_type$ENQUIRY <- factor(SRM_NRES_type$ENQUIRY, levels = unique(SRM_NRES_type$ENQUIRY))
 
 SRM_NRES_type <- SRM_NRES_type %>%
-                 gather(XAXIS, VALUE, ACC_TYPE, MONTH:QUARTER)
+                 gather(XAXIS, VALUE, ACC_TYPE, MONTH:QUARTER, SR_CALL_METHOD)
 
 ```
 
@@ -924,7 +1414,7 @@ renderPlot({
 # CallQual3[CallQual3$SRM == TRUE,]$SRM <- "SRM"
 # CallQual3[CallQual3$SRM == FALSE,]$SRM <- "RESOLVED"
 
-InternalSRM_Action <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "INTERNAL SRM"), .(FY, QUARTER, MONTH, ACC_TYPE, ACTION), summarise, Total = length(MEMO_CONSUMER)) %>%
+InternalSRM_Action <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "INTERNAL SRM"), .(FY, QUARTER, MONTH, ACC_TYPE, ACTION, SR_CALL_METHOD), summarise, Total = length(MEMO_CONSUMER)) %>%
                       arrange(-Total) #%>%
                       #mutate(cumulative = cumsum(Total)/sum(Total))# %>%
                       # filter(cumulative < 0.93)
@@ -942,13 +1432,13 @@ InternalSRM_Action_filter <- InternalSRM_Action_filter %>%
 
 InternalSRM_Action[!(InternalSRM_Action$ACTION %in% InternalSRM_Action_filter$ACTION), ]$ACTION <- "OTHER"
 
-InternalSRM_Action <- aggregate(Total ~ FY + QUARTER + MONTH + ACC_TYPE + ACTION, InternalSRM_Action, sum)
+InternalSRM_Action <- aggregate(Total ~ FY + QUARTER + MONTH + ACC_TYPE + ACTION + SR_CALL_METHOD, InternalSRM_Action, sum)
 
 InternalSRM_Action <- InternalSRM_Action %>%
                       arrange(-Total)
 
 InternalSRM_Action <- InternalSRM_Action %>%
-                       gather(XAXIS, VALUE, ACC_TYPE, QUARTER:MONTH)
+                       gather(XAXIS, VALUE, ACC_TYPE, QUARTER:MONTH, SR_CALL_METHOD)
 
 # SRM_NRES_type$ENQUIRY <- factor(SRM_NRES_type$ENQUIRY, levels = unique(SRM_NRES_type$ENQUIRY))
 
@@ -983,7 +1473,7 @@ InternalSRM_ConType$SR_CALL_METHOD[InternalSRM_ConType$SR_CALL_METHOD == "E"] <-
 InternalSRM_ConType <- aggregate(Total ~ FY + QUARTER + MONTH + ACC_TYPE + SR_CALL_METHOD, InternalSRM_ConType, sum)
 
 InternalSRM_ConType <- InternalSRM_ConType %>%
-                       gather(XAXIS, VALUE, ACC_TYPE, MONTH:QUARTER)
+                       gather(XAXIS, VALUE, ACC_TYPE, MONTH:QUARTER, SR_CALL_METHOD)
 
 ```
 
@@ -1153,7 +1643,7 @@ renderChart3 <- function( expr, env = parent.frame(), quoted = FALSE ){
 }
 
 shinyApp(
-  ui = showOutput('sankey', 'C:/Users/farrelp1/Documents/rCharts_d3_sankey/libraries/widgets/d3_sankey'),
+  ui = showOutput('sankey', 'N:/ABR/Output_2_RootCauseSRMandRepeats/Shiny/rCharts_d3_sankey/libraries/widgets/d3_sankey'),
 
   server = function( input, output ) {
 
@@ -1266,7 +1756,6 @@ renderPlot({
 
 ```
 
-
 ###Metering {.tabset .tabset-fade}
 
 #### Summary
@@ -1274,7 +1763,7 @@ renderPlot({
 
 ```{r Metering and action, include=FALSE}
 
-MeteringSRM_Action <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "METERING"), .(FY, QUARTER, MONTH, ACC_TYPE, ACTION), summarise, Total = length(MEMO_CONSUMER)) %>%
+MeteringSRM_Action <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "METERING"), .(FY, QUARTER, MONTH, ACC_TYPE, ACTION, SR_CALL_METHOD), summarise, Total = length(MEMO_CONSUMER)) %>%
                       arrange(-Total)
 
 MeteringSRM_Action_filter <- aggregate(Total ~ ACTION, MeteringSRM_Action, sum)
@@ -1287,7 +1776,7 @@ MeteringSRM_Action_filter <- MeteringSRM_Action_filter %>%
 
 MeteringSRM_Action[!(MeteringSRM_Action$ACTION %in% MeteringSRM_Action_filter$ACTION), ]$ACTION <- "OTHER"
 
-MeteringSRM_Action <- aggregate(Total ~ FY + QUARTER + MONTH + ACC_TYPE + ACTION, MeteringSRM_Action, sum)
+MeteringSRM_Action <- aggregate(Total ~ FY + QUARTER + MONTH + ACC_TYPE + ACTION + SR_CALL_METHOD, MeteringSRM_Action, sum)
 
 MeteringSRM_Action <- MeteringSRM_Action %>%
                       arrange(-Total)
@@ -1298,7 +1787,7 @@ MeteringSRM_Action <- MeteringSRM_Action %>%
 
 ```
 
-These Metering SRMs are raised against the owner `r 100 * round(sum(MeteringSRM_Action[MeteringSRM_Action$ACC_TYPE == "OWNER", 6])/sum(MeteringSRM_Action[,6]), 2)`% of the time followed by `r 100 * round(sum(MeteringSRM_Action[MeteringSRM_Action$ACC_TYPE == "TENANT", 6])/sum(MeteringSRM_Action[,6]), 2)`% against the tenant.   
+<!-- These Metering SRMs are raised against the owner `r 100 * round(sum(MeteringSRM_Action[MeteringSRM_Action$ACC_TYPE == "OWNER", 6])/sum(MeteringSRM_Action[,6]), 2)`% of the time followed by `r 100 * round(sum(MeteringSRM_Action[MeteringSRM_Action$ACC_TYPE == "TENANT", 6])/sum(MeteringSRM_Action[,6]), 2)`% against the tenant.    -->
 
 ```{r METERING SRM contact type, include=FALSE}
 
@@ -1326,7 +1815,7 @@ MeteringSRM_ConType <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES"
 MeteringSRM_ConType <- aggregate(Total ~ FY + QUARTER + MONTH + ACC_TYPE + SR_CALL_METHOD, MeteringSRM_ConType, sum)
 
 MeteringSRM_ConType <- MeteringSRM_ConType %>%
-                       gather(XAXIS, VALUE, ACC_TYPE, MONTH:QUARTER)
+                       gather(XAXIS, VALUE, ACC_TYPE, MONTH:QUARTER, SR_CALL_METHOD)
 
 ```
 
@@ -1420,7 +1909,7 @@ The graph below shows that the most common pathways for Internal SRMs are:
 # Enquiries::TeamSankey(enquiry = "METERING", filename = "MeteringSRM_Teamflow")
 
 shinyApp(
-  ui = showOutput('sankey', 'C:/Users/farrelp1/Documents/rCharts_d3_sankey/libraries/widgets/d3_sankey'),
+  ui = showOutput('sankey', 'N:/ABR/Output_2_RootCauseSRMandRepeats/Shiny/rCharts_d3_sankey/libraries/widgets/d3_sankey'),
 
   server = function( input, output ) {
 
@@ -1539,7 +2028,7 @@ renderPlot({
 # CallQual3[CallQual3$SRM == TRUE,]$SRM <- "SRM"
 # CallQual3[CallQual3$SRM == FALSE,]$SRM <- "RESOLVED"
 
-TradeWasteSRM_Action <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "TRADE WASTE"), .(FY, QUARTER, MONTH, ACC_TYPE, ACTION), summarise, Total = length(MEMO_CONSUMER)) %>%
+TradeWasteSRM_Action <- ddply(CallQual3 %>% filter(SRM == "SRM", USES == "NONRES", ENQUIRY == "TRADE WASTE"), .(FY, QUARTER, MONTH, ACC_TYPE, ACTION, SR_CALL_METHOD), summarise, Total = length(MEMO_CONSUMER)) %>%
                       arrange(-Total) #%>%
                       #mutate(cumulative = cumsum(Total)/sum(Total))# %>%
                       # filter(cumulative < 0.93)
@@ -1557,7 +2046,7 @@ TradeWasteSRM_Action_filter <- TradeWasteSRM_Action_filter %>%
 
 TradeWasteSRM_Action[!(TradeWasteSRM_Action$ACTION %in% TradeWasteSRM_Action_filter$ACTION), ]$ACTION <- "OTHER"
 
-TradeWasteSRM_Action <- aggregate(Total ~ FY + QUARTER + MONTH + ACC_TYPE + ACTION, TradeWasteSRM_Action, sum)
+TradeWasteSRM_Action <- aggregate(Total ~ FY + QUARTER + MONTH + ACC_TYPE + ACTION + SR_CALL_METHOD, TradeWasteSRM_Action, sum)
 
 TradeWasteSRM_Action <- TradeWasteSRM_Action %>%
                         arrange(-Total)
@@ -1566,7 +2055,7 @@ TradeWasteSRM_Action <- TradeWasteSRM_Action %>%
 
 ```
 
-These internal SRMs are raised against the trade waste account `r 100 * round(sum(TradeWasteSRM_Action[TradeWasteSRM_Action$ACC_TYPE == "TRADE_WASTE", 6])/sum(TradeWasteSRM_Action[,6]), 2)`% of the time followed by `r 100 * round(sum(TradeWasteSRM_Action[TradeWasteSRM_Action$ACC_TYPE == "TENANT", 6])/sum(TradeWasteSRM_Action[,6]), 2)`% against the tenant.   
+<!-- These internal SRMs are raised against the trade waste account `r 100 * round(sum(TradeWasteSRM_Action[TradeWasteSRM_Action$ACC_TYPE == "TRADE_WASTE", 6])/sum(TradeWasteSRM_Action[,6]), 2)`% of the time followed by `r 100 * round(sum(TradeWasteSRM_Action[TradeWasteSRM_Action$ACC_TYPE == "TENANT", 6])/sum(TradeWasteSRM_Action[,6]), 2)`% against the tenant.    -->
 
 ```{r TRADEWASTE SRM contact type, include=FALSE}
 
@@ -1679,7 +2168,7 @@ The graph below shows that the most common pathways for Internal SRMs are:
 # Enquiries::TeamSankey(enquiry = "TRADE WASTE", filename = "TradeWasteSRM_Teamflow")
 
 shinyApp(
-  ui = showOutput('sankey', 'C:/Users/farrelp1/Documents/rCharts_d3_sankey/libraries/widgets/d3_sankey'),
+  ui = showOutput('sankey', 'N:/ABR/Output_2_RootCauseSRMandRepeats/Shiny/rCharts_d3_sankey/libraries/widgets/d3_sankey'),
 
   server = function( input, output ) {
 
@@ -1961,6 +2450,64 @@ Users2 = rbind(USES_TYPE, USES_METHOD, Enquiry_Creator, Creator_Closer) %>%
 sankeyPlot(Users2, "Enquiry_users2")
 
 htmltools::includeHTML("C:/Enquiries/data/Enquiry_users2.html")
+
+```
+
+```{r Recursive, eval=FALSE, include=FALSE}
+
+TEST <- CallQual3 %>%
+        filter(MEMO_CONSUMER == 12100000710) %>%
+        select(MEMO_CONSUMER, MEMO_ID, MEMO_DATETIME) %>%
+        group_by(MEMO_CONSUMER) %>%
+        #arrange(-MEMO_ID, MEMO_DATETIME))
+        mutate(CALL_ID)
+
+Call_ID <- numeric()
+
+for(i in seq_along(TEST$MEMO_DATETIME)) {
+
+  idx <- TEST$MEMO_DATETIME[i] %within% interval(TEST$MEMO_DATETIME - minutes(5), TEST$MEMO_DATETIME + minutes(5))
+  
+  #idx <- lapply(TEST$MEMO_DATETIME, function(x) x %within% interval(TEST$MEMO_DATETIME - minutes(5), TEST$MEMO_DATETIME + minutes(5)))
+  
+  match <- TEST$MEMO_ID[idx]
+  
+  idx2 <- which.min(match)
+  
+  Call_ID[i] <- match[minmatch]
+  
+  Call_ID[i] <- ifelse(Call_ID[i] == min(TEST$MEMO_ID), Call_ID[i], Call_ID[idx2])
+
+}
+
+idx <- TEST$MEMO_DATETIME[1] %within% interval(TEST$MEMO_DATETIME - minutes(5), TEST$MEMO_DATETIME + minutes(5))
+
+
+TEST$MEMO_DATETIME[3] %within% interval(TEST$MEMO_DATETIME[1] - minutes(5), TEST$MEMO_DATETIME[1] + minutes(5))
+
+TEST$MEMO_DATETIME[3] %within% interval(TEST$MEMO_DATETIME[2] - minutes(5), TEST$MEMO_DATETIME[2] + minutes(5))
+
+TEST$MEMO_DATETIME
+
+callid <- function(MEMO_ID, MEMO_DATETIME) {
+  
+  #lapply(TEST$MEMO_DATETIME, function(x) x %within% interval(TEST$MEMO_DATETIME - minutes(5), TEST$MEMO_DATETIME + minutes(5)))
+  lastcall <- function(MEMO_ID, MEMO_DATETIME, Prev_MEMO_ID) { 
+    
+    idx <- TEST$MEMO_DATETIME[1] %within% interval(TEST$MEMO_DATETIME - minutes(5), TEST$MEMO_DATETIME + minutes(5))
+  
+    Call_ID <- TEST$MEMO_ID[which.min(TEST$MEMO_ID[idx])]
+    
+      if(Call_ID != ) {
+      
+        
+      }
+    
+    }
+  return(Call_ID)
+}
+
+callid(TEST$MEMO_CONSUMER, TEST$MEMO_ID, TEST$MEMO_DATETIME)
 
 ```
 

@@ -1,14 +1,14 @@
-detach("package:Enquiries", unload=TRUE)
+detach("package:ABR", unload=TRUE)
 
 library(devtools)
 library(roxygen2)
-remove.packages("Enquiries")
+remove.packages("GNAFAPI")
 setwd("G:/Business and Environmental Services/Business Customer Programs/Customers/")
 create("RDashboard")
-setwd("G:/Business and Environmental Services/Business Customer Programs/Customers/Dashboard")
+setwd("C:/ABR")
 document()
 setwd("C:/")
-install("Enquiries")
+install("GNAFAPI")
 library(Enquiries)
 setwd("C:/Enquiries")
 
